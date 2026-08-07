@@ -116,7 +116,7 @@ export function ProfileView({ childNames }: Props) {
       {/* 7-day mini-calendar */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 'var(--space-4)' }}>
         {profile.weekGrid.map((status, i) => (
-          <div key={i} className="day-cell">
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
             <span style={{ fontSize: 10, opacity: 0.55 }}>{DAY_SHORTS[i]}</span>
             <span
               className={`tag ${STATUS_META[status].tag}`}
