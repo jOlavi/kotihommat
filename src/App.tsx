@@ -1,4 +1,15 @@
+import { useState } from 'react'
+import { OnboardingView } from '@/pages/onboarding/OnboardingView'
+
+interface FamilyState {
+  creatorName: string
+  familyName: string
+  members: { name: string; role: 'parent' | 'child' }[]
+}
+
 export default function App() {
+  const [family, setFamily] = useState<FamilyState | null>(null)
+
   return (
     <div
       style={{
@@ -12,12 +23,28 @@ export default function App() {
         boxShadow: 'var(--shadow-lg)',
       }}
     >
-      <header className="nav" style={{ padding: 'var(--space-3) var(--space-4)', flex: 'none' }}>
-        <span className="nav-brand" style={{ fontSize: 16 }}>Kotihommat</span>
-      </header>
-      <main style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4)' }}>
-        <p className="text-muted">Projekti alustettu. Näkymät tulossa.</p>
-      </main>
+      {family === null ? (
+        <OnboardingView
+          onComplete={(creatorName, familyName, members) =>
+            setFamily({ creatorName, familyName, members })
+          }
+        />
+      ) : (
+        <>
+          <header className="nav" style={{ padding: 'var(--space-3) var(--space-4)', flex: 'none' }}>
+            <span className="nav-brand" style={{ fontSize: 16 }}>Kotihommat</span>
+            <button
+              className="tag tag-accent"
+              style={{ border: 'none', cursor: 'pointer', fontFamily: 'var(--font-heading)', fontWeight: 600 }}
+            >
+              {family.creatorName}
+            </button>
+          </header>
+          <main style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4)' }}>
+            <p className="text-muted">Tervetuloa, {family.creatorName}! Näkymät tulossa.</p>
+          </main>
+        </>
+      )}
     </div>
   )
 }
