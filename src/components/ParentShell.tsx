@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ListChecks, Users, UserCircle, Settings } from 'lucide-react'
 import { FamilyView } from '@/pages/parent/FamilyView'
 import { ChoresView } from '@/pages/parent/ChoresView'
+import { ProfileView } from '@/pages/parent/ProfileView'
 
 interface Family {
   creatorName: string
@@ -67,9 +68,9 @@ export function ParentShell({ family, onAddMember, onRoleToggle }: Props) {
           />
         )}
         {activeTab === 'profile' && (
-          <div style={{ padding: 'var(--space-4)' }}>
-            <p className="text-muted">Lapsen profiili tulossa.</p>
-          </div>
+          <ProfileView
+            childNames={family.members.filter(m => m.role === 'child').map(m => m.name)}
+          />
         )}
       </main>
 
