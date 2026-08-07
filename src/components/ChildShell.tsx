@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Home, CalendarDays, PiggyBank, Settings } from 'lucide-react'
 import { TodayView, Task } from '@/pages/child/TodayView'
 import { WeekView } from '@/pages/child/WeekView'
+import { BalanceView } from '@/pages/child/BalanceView'
 
 type Tab = 'today' | 'week' | 'balance'
 
@@ -87,11 +88,7 @@ export function ChildShell({ childName, onRoleToggle }: Props) {
       <main style={{ flex: 1, overflowY: 'auto' }}>
         {activeTab === 'today' && <TodayView tasks={todayTasks} onToggle={handleToggle} />}
         {activeTab === 'week' && <WeekView tasks={tasks} today={TODAY} />}
-        {activeTab === 'balance' && (
-          <div style={{ padding: 'var(--space-4)' }}>
-            <p className="text-muted">Oma saldo tulossa.</p>
-          </div>
-        )}
+        {activeTab === 'balance' && <BalanceView />}
       </main>
 
       <nav style={{ display: 'flex', borderTop: '1px solid var(--color-divider)', flex: 'none' }}>
