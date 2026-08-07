@@ -1,0 +1,43 @@
+interface Props {
+  onAdd: (name: string) => void
+  onClose: () => void
+}
+
+export function AddChildDialog({ onAdd, onClose }: Props) {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const name = (
+      e.currentTarget.elements.namedItem('name') as HTMLInputElement
+    ).value.trim()
+    if (name) onAdd(name)
+  }
+
+  return (
+    <div className="dialog-backdrop">
+      <div className="dialog">
+        <h2 className="dialog-title">Lisää lapsi</h2>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          <div className="field">
+            <label htmlFor="child-name">Lapsen nimi</label>
+            <input
+              className="input"
+              id="child-name"
+              name="name"
+              placeholder="esim. Aino"
+              required
+              autoFocus
+            />
+          </div>
+          <div className="dialog-actions">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>
+              Peruuta
+            </button>
+            <button type="submit" className="btn btn-primary">
+              Lisää
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
