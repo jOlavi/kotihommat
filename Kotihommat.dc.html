@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="stylesheet" href="_ds/classical-07eb5d55-3f42-4766-8589-afd9b3a98725/styles.css">
+<script src="_ds/classical-07eb5d55-3f42-4766-8589-afd9b3a98725/_ds_bundle.js"></script>
+<style>
+  html,body{background:var(--color-neutral-300);}
+  .toggle{position:relative;width:42px;height:24px;flex:none;border-radius:999px;border:1px solid var(--color-divider);background:var(--color-neutral-200);cursor:pointer;transition:background .15s}
+  .toggle input{position:absolute;opacity:0;inset:0;width:100%;height:100%;margin:0;cursor:pointer}
+  .toggle .knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:var(--shadow-sm);transition:transform .15s}
+  .toggle:has(input:checked){background:var(--color-accent)}
+  .toggle:has(input:checked) .knob{transform:translateX(18px)}
+  .day-cell{display:flex;flex-direction:column;align-items:center;gap:4px}
+  ::-webkit-scrollbar{width:0;height:0}
+</style>
+</helmet>
+<div style="min-height:100dvh;display:flex;align-items:flex-start;justify-content:center;padding:0;font-family:var(--font-body);color:var(--color-text)">
+<div style="{{ rootStyle }}">
+<div style="width:min(480px,100vw);height:min(900px,100dvh);background:var(--color-bg);border-radius:0;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:var(--shadow-lg)">
+
+<sc-if value="{{ !onboardingDone }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:var(--color-bg);display:flex;flex-direction:column;padding:var(--space-8) var(--space-6);z-index:50;overflow-y:auto">
+
+  <sc-if value="{{ setupStageIsCreate }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:var(--space-6)">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:var(--space-3);text-align:center">
+        <div style="width:56px;height:56px;border-radius:50%;border:1.5px solid var(--color-accent);display:flex;align-items:center;justify-content:center">
+          <span style="font-family:var(--font-heading);font-weight:600;font-size:24px;color:var(--color-accent)">K</span>
+        </div>
+        <h1 style="font-size:28px;margin:0">Luo perheesi</h1>
+        <p style="opacity:.7;max-width:32ch;margin:0">Aloitetaan lisäämällä sinut ensimmäisenä vanhempana.</p>
+      </div>
+      <form onSubmit="{{ handleCreateFamily }}" style="display:flex;flex-direction:column;gap:var(--space-3)">
+        <div class="field"><label for="setup-name">Oma nimi</label><input class="input" id="setup-name" name="name" required="{{ true }}" placeholder="esim. Liisa"></div>
+        <div class="field"><label for="setup-family">Perheen nimi</label><input class="input" id="setup-family" name="family" required="{{ true }}" defaultValue="Virtanen"></div>
+        <button type="submit" class="btn btn-primary btn-block">Luo perhe</button>
+      </form>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ !setupStageIsCreate }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1;display:flex;flex-direction:column;gap:var(--space-4)">
+      <div style="text-align:center;padding-top:var(--space-4)">
+        <span class="tag tag-accent" style="font-family:var(--font-heading);font-weight:600;font-size:13px">{{ setupFamilyLabel }}</span>
+        <p style="opacity:.65;margin:var(--space-2) 0 0;font-size:13px">Perhe luotu. Lisää muut jäsenet, tai jatka sovellukseen.</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:var(--space-2)">
+        <sc-for list="{{ familyMembers }}" as="m" hint-placeholder-count="1">
+          <div class="card" style="flex-direction:row;align-items:center;gap:var(--space-3);padding:var(--space-2) var(--space-3)">
+            <div style="width:30px;height:30px;border-radius:50%;border:1.5px solid var(--color-divider);display:flex;align-items:center;justify-content:center;flex:none;font-family:var(--font-heading);font-weight:600;font-size:13px">{{ m.initial }}</div>
+            <span style="flex:1;font-size:14px">{{ m.name }}</span>
+            <span class="tag {{ m.tagClass }}">{{ m.roleLabel }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:var(--space-2);margin-top:auto">
+        <div style="display:flex;gap:var(--space-2)">
+          <button type="button" class="btn btn-secondary" style="flex:1" onClick="{{ openAddChild }}">Lisää lapsi</button>
+          <button type="button" class="btn btn-secondary" style="flex:1" onClick="{{ openInvite }}">Lisää vanhempi</button>
+        </div>
+        <button type="button" class="btn btn-primary btn-block" onClick="{{ finishFamilySetup }}">Valmis, siirry sovellukseen</button>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</sc-if>
+
+<sc-if value="{{ onboardingDone }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;height:100%">
+
+  <header class="nav" style="padding:var(--space-3) var(--space-4);flex:none">
+    <span class="nav-brand" style="font-size:16px">Kotihommat</span>
+    <button type="button" onClick="{{ toggleRole }}" class="tag tag-accent" style="border:none;cursor:pointer;font-family:var(--font-heading);font-weight:600;margin-right:auto;margin-left:var(--space-2)">{{ familyBadgeLabel }}</button>
+    <button type="button" class="btn btn-ghost btn-icon" aria-label="Asetukset" onClick="{{ openSettings }}">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </header>
+
+  <main style="flex:1;overflow-y:auto;padding:var(--space-4)">
+
+    <!-- CHILD: TÄNÄÄN -->
+    <sc-if value="{{ showChildToday }}" hint-placeholder-val="{{ true }}">
+      <sc-if value="{{ showBanner }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;gap:var(--space-2);border:1px solid var(--color-accent);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);margin-bottom:var(--space-4);background:var(--color-accent-100)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-700)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+          <span style="font-size:13px;flex:1;color:var(--color-accent-800)">{{ bannerText }}</span>
+          <button type="button" onClick="{{ dismissBanner }}" class="btn btn-ghost btn-icon" style="width:24px;height:24px" aria-label="Sulje"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+      </sc-if>
+      <h2 style="margin-bottom:2px">{{ todayLabel }}</h2>
+      <sc-if value="{{ reminderTime }}" hint-placeholder-val="{{ false }}">
+        <p style="display:flex;align-items:center;gap:5px;font-size:12px;opacity:.6;margin:0 0 var(--space-4)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+          Muistutus klo {{ reminderTime }}
+        </p>
+      </sc-if>
+      <div style="display:flex;flex-direction:column;gap:var(--space-2)">
+        <sc-for list="{{ todayTasks }}" as="t" hint-placeholder-count="3">
+          <label class="card" style="flex-direction:row;align-items:center;gap:var(--space-3);cursor:pointer;padding:var(--space-3)">
+            <input type="checkbox" checked="{{ t.checked }}" onChange="{{ t.toggleFn }}" disabled="{{ t.locked }}" style="width:22px;height:22px;flex:none;accent-color:var(--color-accent)">
+            <span style="flex:1;font-size:15px;text-decoration:{{ t.strike }}">{{ t.name }}</span>
+            <span style="font-family:var(--font-heading);font-weight:600;color:var(--color-accent-700);font-size:14px">{{ t.priceLabel }}</span>
+          </label>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <!-- CHILD: VIIKKO -->
+    <sc-if value="{{ showChildWeek }}" hint-placeholder-val="{{ false }}">
+      <h2 style="margin-bottom:var(--space-4)">{{ weekLabel }}</h2>
+      <div style="display:flex;flex-direction:column;gap:var(--space-4)">
+        <sc-for list="{{ weekView }}" as="d" hint-placeholder-count="7">
+          <div>
+            <div class="hr" style="margin:0 0 var(--space-2)"></div>
+            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:var(--space-2)">
+              <h5 style="margin:0">{{ d.label }}</h5>
+              <span style="font-size:11px;opacity:.5">{{ d.date }}</span>
+              <sc-if value="{{ d.isToday }}" hint-placeholder-val="{{ false }}"><span class="tag tag-outline">Tänään</span></sc-if>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <sc-for list="{{ d.tasks }}" as="t" hint-placeholder-count="2">
+                <div style="display:flex;align-items:center;gap:var(--space-2);font-size:13px">
+                  <span style="flex:1">{{ t.name }}</span>
+                  <span class="tag {{ t.tagClass }}">{{ t.statusLabel }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <!-- CHILD: SALDO -->
+    <sc-if value="{{ showChildBalance }}" hint-placeholder-val="{{ false }}">
+      <h2 style="margin-bottom:var(--space-4)">Oma saldo</h2>
+      <div style="border:1px solid var(--color-divider);border-radius:999px;height:34px;position:relative;overflow:hidden;background:var(--color-surface);margin-bottom:var(--space-2)">
+        <div style="position:absolute;inset:0;width:{{ balance.paidPct }}%;background:var(--color-accent-500)"></div>
+        <div style="position:absolute;top:6px;right:8px;width:10px;height:10px;border-radius:50%;border:1.5px solid var(--color-divider);background:var(--color-bg)"></div>
+      </div>
+      <p style="font-size:11px;opacity:.55;margin:0 0 var(--space-6)">Täytetty osuus = jo maksettu taskuraha</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)">
+        <div class="card" style="grid-column:1 / -1;align-items:center;text-align:center;background:var(--color-surface)">
+          <div class="card-kicker">Ansaittu yhteensä</div>
+          <div style="font-family:var(--font-heading);font-weight:600;font-size:30px">{{ balance.ansaittuLabel }}</div>
+        </div>
+        <div class="card" style="align-items:center;text-align:center">
+          <div class="card-kicker">Maksettu</div>
+          <div style="font-family:var(--font-heading);font-weight:600;font-size:20px">{{ balance.maksettuLabel }}</div>
+        </div>
+        <div class="card" style="align-items:center;text-align:center">
+          <div class="card-kicker">Odottaa maksua</div>
+          <div style="font-family:var(--font-heading);font-weight:600;font-size:20px;color:var(--color-accent-700)">{{ balance.odottaaLabel }}</div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- PARENT: KOTITYÖT -->
+    <sc-if value="{{ showParentChores }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:var(--space-3)">
+        <h2 style="margin:0">Kotityöt</h2>
+        <sc-if value="{{ choresViewIsLista }}" hint-placeholder-val="{{ true }}">
+          <button type="button" class="btn btn-primary" onClick="{{ openAddChore }}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            Lisää
+          </button>
+        </sc-if>
+      </div>
+      <div class="seg" style="width:100%;margin-bottom:var(--space-4)">
+        <label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="choresview" checked="{{ choresViewIsLista }}" onChange="{{ setChoresViewLista }}">Lista</label>
+        <label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="choresview" checked="{{ choresViewIsSuunnittelu }}" onChange="{{ setChoresViewSuunnittelu }}">Viikkosuunnittelu</label>
+      </div>
+
+      <sc-if value="{{ choresViewIsLista }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:var(--space-3)">
+          <sc-for list="{{ choresList }}" as="c" hint-placeholder-count="4">
+            <div class="card">
+              <div style="display:flex;align-items:flex-start;gap:var(--space-2)">
+                <div style="flex:1">
+                  <div class="card-title">{{ c.name }}</div>
+                  <div class="card-meta" style="margin-top:4px">
+                    <span class="tag tag-outline">{{ c.typeLabel }}</span>
+                    <span>{{ c.assignedNames }}</span>
+                  </div>
+                </div>
+                <span style="font-family:var(--font-heading);font-weight:600;color:var(--color-accent-700)">{{ c.priceLabel }}</span>
+              </div>
+              <div style="display:flex;gap:var(--space-2);margin-top:var(--space-2)">
+                <button type="button" class="btn btn-secondary" onClick="{{ c.editFn }}" style="flex:1"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Muokkaa</button>
+                <button type="button" class="btn btn-secondary" onClick="{{ c.deleteFn }}" style="flex:1;color:var(--color-accent-800)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Poista</button>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ choresViewIsSuunnittelu }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-1)">
+          <button type="button" class="btn btn-ghost btn-icon" aria-label="Edellinen viikko" onClick="{{ prevPlannerWeek }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+          <h5 style="margin:0;font-size:15px">Suunnittele {{ plannerWeekLabel }}</h5>
+          <button type="button" class="btn btn-ghost btn-icon" aria-label="Seuraava viikko" onClick="{{ nextPlannerWeek }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+        </div>
+        <p style="font-size:12px;opacity:.55;margin:0 0 var(--space-4)">Aseta kuka hoitaa minkäkin kotityön kunakin päivänä.</p>
+        <div style="display:flex;flex-direction:column;gap:var(--space-3)">
+          <sc-for list="{{ plannerRows }}" as="r" hint-placeholder-count="3">
+            <div class="card">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:var(--space-2)">
+                <div class="card-title">{{ r.name }}</div>
+                <span style="font-family:var(--font-heading);font-weight:600;color:var(--color-accent-700);font-size:13px">{{ r.priceLabel }}</span>
+              </div>
+              <sc-if value="{{ r.isDaily }}" hint-placeholder-val="{{ true }}">
+                <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
+                  <sc-for list="{{ r.days }}" as="d" hint-placeholder-count="7">
+                    <div style="display:flex;flex-direction:column;gap:2px;align-items:center">
+                      <span style="font-size:9.5px;opacity:.55">{{ d.short }}</span>
+                      <select class="input" style="padding:3px 2px;font-size:10.5px;min-height:auto;text-align:center" value="{{ d.value }}" onChange="{{ d.setFn }}">
+                        <sc-for list="{{ d.options }}" as="o" hint-placeholder-count="3">
+                          <option value="{{ o.id }}">{{ o.short }}</option>
+                        </sc-for>
+                      </select>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ !r.isDaily }}" hint-placeholder-val="{{ false }}">
+                <div class="field" style="margin:0">
+                  <label style="font-size:11px">Vastuuhenkilö tällä viikolla</label>
+                  <select class="input" value="{{ r.singleValue }}" onChange="{{ r.setSingleFn }}">
+                    <sc-for list="{{ r.options }}" as="o" hint-placeholder-count="3">
+                      <option value="{{ o.id }}">{{ o.name }}</option>
+                    </sc-for>
+                  </select>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <button type="button" class="btn btn-primary btn-block" style="margin-top:var(--space-4)" onClick="{{ savePlannerWeek }}">{{ plannerSaveLabel }}</button>
+      </sc-if>
+    </sc-if>
+
+    <!-- PARENT: PERHE -->
+    <sc-if value="{{ showParentFamily }}" hint-placeholder-val="{{ false }}">
+      <h2 style="margin-bottom:var(--space-4)">Perhe</h2>
+      <div style="display:flex;flex-direction:column;gap:var(--space-2);margin-bottom:var(--space-4)">
+        <sc-for list="{{ familyMembers }}" as="m" hint-placeholder-count="5">
+          <div class="card" style="flex-direction:row;align-items:center;gap:var(--space-3)">
+            <div style="width:38px;height:38px;border-radius:50%;border:1.5px solid var(--color-divider);display:flex;align-items:center;justify-content:center;flex:none;font-family:var(--font-heading);font-weight:600">{{ m.initial }}</div>
+            <div style="flex:1">
+              <div style="font-size:15px;font-weight:600;font-family:var(--font-heading)">{{ m.name }}</div>
+              <div style="font-size:12px;opacity:.6">{{ m.meta }}</div>
+            </div>
+            <span class="tag {{ m.tagClass }}">{{ m.roleLabel }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:var(--space-2)">
+        <button type="button" class="btn btn-primary btn-block" onClick="{{ openAddChild }}">Lisää lapsi</button>
+        <button type="button" class="btn btn-secondary btn-block" onClick="{{ openInvite }}">Kutsu toinen vanhempi</button>
+      </div>
+    </sc-if>
+
+    <!-- PARENT: PROFIILIT -->
+    <sc-if value="{{ showParentProfiles }}" hint-placeholder-val="{{ false }}">
+      <h2 style="margin-bottom:var(--space-3)">Lapsen profiili</h2>
+      <div class="seg" style="margin-bottom:var(--space-4);width:100%">
+        <sc-for list="{{ profileTabs }}" as="p" hint-placeholder-count="3">
+          <label class="seg-opt" style="flex:1;justify-content:center">
+            <input type="radio" name="profiletab" checked="{{ p.active }}" onChange="{{ p.selectFn }}">
+            {{ p.name }}
+          </label>
+        </sc-for>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:var(--space-4)">
+        <sc-for list="{{ selectedProfile.grid }}" as="g" hint-placeholder-count="7">
+          <div class="day-cell">
+            <span style="font-size:10px;opacity:.55">{{ g.short }}</span>
+            <span class="tag {{ g.tagClass }}" style="font-size:9px;padding:2px 5px">{{ g.statusLabel }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--space-2);margin-bottom:var(--space-4)">
+        <div class="card" style="align-items:center;text-align:center;padding:var(--space-2)">
+          <div class="card-kicker" style="font-size:9px">Ansaittu</div>
+          <div style="font-family:var(--font-heading);font-weight:600;font-size:16px">{{ selectedProfile.ansaittuLabel }}</div>
+        </div>
+        <div class="card" style="align-items:center;text-align:center;padding:var(--space-2)">
+          <div class="card-kicker" style="font-size:9px">Maksettu</div>
+          <div style="font-family:var(--font-heading);font-weight:600;font-size:16px">{{ selectedProfile.maksettuLabel }}</div>
+        </div>
+        <div class="card" style="align-items:center;text-align:center;padding:var(--space-2)">
+          <div class="card-kicker" style="font-size:9px">Odottaa</div>
+          <div style="font-family:var(--font-heading);font-weight:600;font-size:16px;color:var(--color-accent-700)">{{ selectedProfile.odottaaLabel }}</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:var(--space-2)">
+        <h5 style="margin:0">Poissaolot</h5>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:var(--space-4)">
+        <sc-if value="{{ selectedProfile.noAbsences }}" hint-placeholder-val="{{ false }}">
+          <p style="font-size:12px;opacity:.5;margin:0">Ei merkittyjä poissaoloja.</p>
+        </sc-if>
+        <sc-for list="{{ selectedProfile.absences }}" as="a" hint-placeholder-count="0">
+          <div style="display:flex;align-items:center;gap:var(--space-2);font-size:13px">
+            <span class="tag tag-neutral">{{ a.type }}</span>
+            <span style="opacity:.7">{{ a.range }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:var(--space-2)">
+        <h5 style="margin:0">Maksuhistoria</h5>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:var(--space-4)">
+        <sc-if value="{{ selectedProfile.noPayments }}" hint-placeholder-val="{{ false }}">
+          <p style="font-size:12px;opacity:.5;margin:0">Ei maksuja vielä.</p>
+        </sc-if>
+        <sc-for list="{{ selectedProfile.payments }}" as="p" hint-placeholder-count="0">
+          <div style="display:flex;align-items:center;gap:var(--space-2);font-size:13px">
+            <span class="tag tag-accent">{{ p.amountLabel }}</span>
+            <span style="opacity:.7">{{ p.date }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;gap:var(--space-2)">
+        <button type="button" class="btn btn-secondary" style="flex:1" onClick="{{ openAbsence }}">Merkitse poissaolo</button>
+        <button type="button" class="btn btn-primary" style="flex:1" disabled="{{ selectedProfile.nothingToPay }}" onClick="{{ openPay }}">Merkitse maksetuksi</button>
+      </div>
+    </sc-if>
+
+  </main>
+
+  <nav style="flex:none;display:flex;border-top:1px solid var(--color-divider);background:var(--color-bg)">
+    <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="3">
+      <button type="button" onClick="{{ n.selectFn }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:var(--space-2) 0 calc(var(--space-2) + 2px);background:transparent;border:none;border-top:2px solid {{ n.borderColor }};cursor:pointer;color:{{ n.color }}">
+        <span dangerouslySetInnerHTML="{{ n.iconHtml }}"></span>
+        <span style="font-size:10.5px;font-family:var(--font-heading);font-weight:600">{{ n.label }}</span>
+      </button>
+    </sc-for>
+  </nav>
+
+</div>
+</sc-if>
+
+<!-- SETTINGS DIALOG -->
+<sc-if value="{{ settingsOpen }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:absolute;z-index:60">
+    <div class="dialog">
+      <div class="dialog-title">Asetukset</div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:14px">Tumma tila</span>
+        <div class="toggle"><input type="checkbox" checked="{{ darkMode }}" onChange="{{ toggleDarkMode }}"><span class="knob"></span></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:14px">Push-ilmoitukset<br><span style="font-size:11px;opacity:.5">Tulossa pian</span></span>
+        <div class="toggle"><input type="checkbox" checked="{{ notifEnabled }}" onChange="{{ toggleNotif }}"><span class="knob"></span></div>
+      </div>
+      <div class="field">
+        <label for="reminder-sel">Päivittäinen muistutus</label>
+        <select id="reminder-sel" class="input" value="{{ reminderTime }}" onChange="{{ setReminderTime }}">
+          <option value="">Ei muistutusta</option>
+          <option value="16:00">16:00</option>
+          <option value="17:00">17:00</option>
+          <option value="18:00">18:00</option>
+          <option value="19:00">19:00</option>
+        </select>
+      </div>
+      <div class="dialog-actions"><button type="button" class="btn btn-primary" onClick="{{ closeSettings }}">Valmis</button></div>
+    </div>
+  </div>
+</sc-if>
+
+<!-- ADD/EDIT CHORE DIALOG -->
+<sc-if value="{{ addChoreOpen }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:absolute;z-index:60">
+    <form class="dialog" onSubmit="{{ handleChoreSubmit }}" key="{{ editingChoreKey }}">
+      <div class="dialog-title">{{ choreDialogTitle }}</div>
+      <div class="field"><label for="chore-name">Nimi</label><input class="input" id="chore-name" name="name" required="{{ true }}" defaultValue="{{ editingChore.name }}" placeholder="esim. Roskien vienti"></div>
+      <div class="field"><label for="chore-price">Hinta (€)</label><input class="input" id="chore-price" name="price" type="number" step="0.5" min="0.5" required="{{ true }}" defaultValue="{{ editingChore.price }}"></div>
+      <div class="field"><label>Tyyppi</label>
+        <div class="seg" style="width:100%">
+          <label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="type" value="paivittainen" defaultChecked="{{ editingChore.isPaivittainen }}">Päivittäin</label>
+          <label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="type" value="viikoittainen" defaultChecked="{{ editingChore.isViikoittainen }}">Viikoittain</label>
+          <label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="type" value="kertaluontoinen" defaultChecked="{{ editingChore.isKertaluontoinen }}">Kerran</label>
+        </div>
+      </div>
+      <div class="field"><label>Kohdista lapselle</label>
+        <div style="display:flex;flex-direction:column;gap:var(--space-1)">
+          <sc-for list="{{ choreAssignOptions }}" as="a" hint-placeholder-count="3">
+            <label class="radio"><input type="checkbox" name="assign" value="{{ a.id }}" defaultChecked="{{ a.checked }}"><span class="dot"></span>{{ a.name }}</label>
+          </sc-for>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-secondary" onClick="{{ closeAddChore }}">Peruuta</button>
+        <button type="submit" class="btn btn-primary">Tallenna</button>
+      </div>
+    </form>
+  </div>
+</sc-if>
+
+<!-- ADD CHILD DIALOG -->
+<sc-if value="{{ addChildOpen }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:absolute;z-index:60">
+    <form class="dialog" onSubmit="{{ handleChildSubmit }}">
+      <div class="dialog-title">Lisää lapsi</div>
+      <div class="field"><label for="child-name">Nimi</label><input class="input" id="child-name" name="name" required="{{ true }}" placeholder="esim. Eemeli"></div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-secondary" onClick="{{ closeAddChild }}">Peruuta</button>
+        <button type="submit" class="btn btn-primary">Lisää</button>
+      </div>
+    </form>
+  </div>
+</sc-if>
+
+<!-- INVITE DIALOG -->
+<sc-if value="{{ inviteOpen }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:absolute;z-index:60">
+    <div class="dialog">
+      <div class="dialog-title">Kutsu toinen vanhempi</div>
+      <p class="dialog-body">Jaa tämä linkki, niin toinen vanhempi pääsee mukaan perheen Kotihommat-tilille.</p>
+      <div class="field"><input class="input" readOnly="{{ true }}" value="{{ inviteLink }}"></div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-secondary" onClick="{{ closeInvite }}">Sulje</button>
+        <button type="button" class="btn btn-primary" onClick="{{ copyInvite }}">{{ copyLabel }}</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<!-- ABSENCE DIALOG -->
+<sc-if value="{{ absenceOpen }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:absolute;z-index:60">
+    <form class="dialog" onSubmit="{{ handleAbsenceSubmit }}">
+      <div class="dialog-title">Merkitse poissaolo — {{ selectedProfile.name }}</div>
+      <div class="field"><label>Syy</label>
+        <div class="stack" style="gap:var(--space-1)">
+          <label class="radio"><input type="radio" name="atype" value="Loma" defaultChecked="{{ true }}"><span class="dot"></span>Loma</label>
+          <label class="radio"><input type="radio" name="atype" value="Sairas"><span class="dot"></span>Sairas</label>
+        </div>
+      </div>
+      <div class="grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)">
+        <div class="field"><label for="a-from">Alkaa</label><input class="input" id="a-from" name="from" type="date" required="{{ true }}"></div>
+        <div class="field"><label for="a-to">Päättyy</label><input class="input" id="a-to" name="to" type="date" required="{{ true }}"></div>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-secondary" onClick="{{ closeAbsence }}">Peruuta</button>
+        <button type="submit" class="btn btn-primary">Tallenna</button>
+      </div>
+    </form>
+  </div>
+</sc-if>
+
+<!-- PAY DIALOG -->
+<sc-if value="{{ payOpen }}" hint-placeholder-val="{{ false }}">
+  <div class="dialog-backdrop" style="position:absolute;z-index:60">
+    <form class="dialog" onSubmit="{{ handlePaySubmit }}" key="{{ selectedProfile.name }}">
+      <div class="dialog-title">Merkitse maksetuksi — {{ selectedProfile.name }}</div>
+      <p class="dialog-body">Odottaa maksua: {{ selectedProfile.odottaaLabel }}. Kirjaa kuinka paljon taskurahaa maksat nyt.</p>
+      <div class="field">
+        <label for="pay-amount">Maksettava summa (€)</label>
+        <input class="input" id="pay-amount" name="amount" type="number" step="0.5" min="0.5" max="{{ selectedProfile.odottaaRaw }}" defaultValue="{{ selectedProfile.odottaaRaw }}" required="{{ true }}">
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-secondary" onClick="{{ closePay }}">Peruuta</button>
+        <button type="submit" class="btn btn-primary">Maksa</button>
+      </div>
+    </form>
+  </div>
+</sc-if>
+
+</div>
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const ICONS = {
+  home: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
+  calendar: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>',
+  piggy: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="9" width="16" height="10" rx="5"/><circle cx="16" cy="6" r="2"/><path d="M8 19v2"/><path d="M14 19v2"/></svg>',
+  list: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11"/><path d="M9 12h11"/><path d="M9 18h11"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg>',
+  users: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  user: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>'
+};
+
+const CHILD_ACCENT = {
+  '--color-accent': 'oklch(58% 0.11 220)', '--color-accent-100': 'oklch(96% 0.015 220)',
+  '--color-accent-200': 'oklch(91% 0.03 220)', '--color-accent-300': 'oklch(84% 0.05 220)',
+  '--color-accent-400': 'oklch(74% 0.08 220)', '--color-accent-500': 'oklch(64% 0.10 220)',
+  '--color-accent-600': 'oklch(55% 0.11 220)', '--color-accent-700': 'oklch(45% 0.10 220)',
+  '--color-accent-800': 'oklch(34% 0.08 220)', '--color-accent-900': 'oklch(24% 0.06 220)'
+};
+const DARK = { '--color-bg': '#201f1d', '--color-surface': '#2d2b2b', '--color-text': '#f3f2f2', '--color-divider': 'rgba(255,255,255,0.16)' };
+
+const WEEK_DAYS = [
+  { key: 'ma', label: 'Maanantai', short: 'Ma', date: '14.9.' },
+  { key: 'ti', label: 'Tiistai', short: 'Ti', date: '15.9.' },
+  { key: 'ke', label: 'Keskiviikko', short: 'Ke', date: '16.9.' },
+  { key: 'to', label: 'Torstai', short: 'To', date: '17.9.' },
+  { key: 'pe', label: 'Perjantai', short: 'Pe', date: '18.9.' },
+  { key: 'la', label: 'Lauantai', short: 'La', date: '19.9.' },
+  { key: 'su', label: 'Sunnuntai', short: 'Su', date: '20.9.' }
+];
+const TODAY_KEY = 'ke';
+
+function fmtEur(n) { return n.toFixed(2).replace('.', ',') + ' €'; }
+
+function makeTasks(defs) {
+  return defs.map((d, i) => ({ id: i + 1, name: d[0], price: d[1], status: d[2] }));
+}
+
+class Component extends DCLogic {
+  state = {
+    role: 'lapsi',
+    onboardingDone: false,
+    setupStage: 'create',
+    familyName: 'Virtanen',
+    myName: 'Mikko',
+    childScreen: 'tanaan',
+    parentScreen: 'kotityot',
+    darkMode: false,
+    notifEnabled: false,
+    reminderTime: '17:00',
+    bannerDismissed: false,
+    settingsOpen: false,
+    addChoreOpen: false,
+    addChildOpen: false,
+    inviteOpen: false,
+    absenceOpen: false,
+    editingChoreId: null,
+    copyLabel: 'Kopioi linkki',
+    profileChildId: 'aino',
+    children: [
+      { id: 'aino', name: 'Aino', age: 14 },
+      { id: 'onni', name: 'Onni', age: 11 },
+      { id: 'helmi', name: 'Helmi', age: 8 }
+    ],
+    parents: [
+      { id: 'liisa', name: 'Liisa Virtanen' },
+      { id: 'mikko', name: 'Mikko Virtanen' }
+    ],
+    chores: [
+      { id: 1, name: 'Astianpesukoneen tyhjennys', price: 0.5, type: 'paivittainen', assigned: ['aino', 'onni', 'helmi'] },
+      { id: 2, name: 'Sängyn petaus', price: 0.5, type: 'paivittainen', assigned: ['aino', 'onni', 'helmi'] },
+      { id: 3, name: 'Roskien vienti', price: 1, type: 'viikoittainen', assigned: ['onni'] },
+      { id: 4, name: 'Pyykin kokoaminen', price: 1.5, type: 'viikoittainen', assigned: ['aino'] },
+      { id: 5, name: 'Lemmikin ruokinta', price: 0.5, type: 'paivittainen', assigned: ['helmi'] },
+      { id: 6, name: 'Imurointi', price: 1.5, type: 'viikoittainen', assigned: ['aino'] },
+      { id: 7, name: 'Auton pesu', price: 3, type: 'kertaluontoinen', assigned: ['onni'] },
+      { id: 8, name: 'Pihatyöt', price: 2, type: 'kertaluontoinen', assigned: ['aino'] },
+      { id: 9, name: 'Koiran ulkoilutus', price: 0.5, type: 'paivittainen', assigned: ['liisa', 'mikko', 'aino', 'onni', 'helmi'] }
+    ],
+    choresView: 'lista',
+    plannerWeek: 35,
+    weeklyPlan: {
+      1: { ma: 'aino', ti: 'onni', ke: 'helmi', to: 'aino', pe: 'onni', la: 'helmi', su: 'aino' },
+      2: { ma: 'helmi', ti: 'aino', ke: 'onni', to: 'helmi', pe: 'aino', la: 'onni', su: 'helmi' },
+      3: { all: 'onni' },
+      4: { all: 'aino' },
+      5: { ma: 'helmi', ti: 'helmi', ke: 'helmi', to: 'helmi', pe: 'helmi', la: 'helmi', su: 'helmi' },
+      6: { all: 'aino' },
+      9: { ma: 'aino', ti: 'onni', ke: 'helmi', to: 'liisa', pe: 'mikko', la: 'onni', su: 'aino' }
+    },
+    helmiTasks: {
+      ma: makeTasks([['Astianpesukoneen tyhjennys', 0.5, 'tehty'], ['Sängyn petaus', 0.5, 'tehty'], ['Lemmikin ruokinta', 0.5, 'tehty']]),
+      ti: makeTasks([['Astianpesukoneen tyhjennys', 0.5, 'tehty'], ['Sängyn petaus', 0.5, 'tehty'], ['Lemmikin ruokinta', 0.5, 'tehty']]),
+      ke: makeTasks([['Astianpesukoneen tyhjennys', 0.5, 'tekematon'], ['Sängyn petaus', 0.5, 'tekematon'], ['Lemmikin ruokinta', 0.5, 'tekematon']]),
+      to: makeTasks([['Astianpesukoneen tyhjennys', 0.5, 'tekematon'], ['Sängyn petaus', 0.5, 'tekematon'], ['Lemmikin ruokinta', 0.5, 'tekematon']]),
+      pe: makeTasks([['Astianpesukoneen tyhjennys', 0.5, 'merkitty'], ['Sängyn petaus', 0.5, 'merkitty'], ['Lemmikin ruokinta', 0.5, 'merkitty']]),
+      la: makeTasks([['Sängyn petaus', 0.5, 'tekematon'], ['Lemmikin ruokinta', 0.5, 'tekematon']]),
+      su: makeTasks([['Sängyn petaus', 0.5, 'tekematon'], ['Lemmikin ruokinta', 0.5, 'tekematon']])
+    },
+    profiles: {
+      aino: { grid: ['full', 'full', 'partial', 'future', 'future', 'future', 'future'], ansaittu: 24, maksettu: 20, absences: [], payments: [{ date: '1.9.2026', amount: 20 }] },
+      onni: { grid: ['full', 'partial', 'full', 'future', 'future', 'future', 'future'], ansaittu: 15.5, maksettu: 10, absences: [], payments: [{ date: '1.9.2026', amount: 10 }] },
+      helmi: { grid: ['full', 'full', 'partial', 'future', 'poissa', 'future', 'future'], ansaittu: 18.5, maksettu: 12, absences: [{ type: 'Sairas', range: '18.9.2026' }], payments: [{ date: '1.9.2026', amount: 12 }] }
+    }
+  };
+
+  toggleTask(day, id) {
+    this.setState(s => ({
+      helmiTasks: { ...s.helmiTasks, [day]: s.helmiTasks[day].map(t => t.id === id ? { ...t, status: t.status === 'tehty' ? 'tekematon' : 'tehty' } : t) }
+    }));
+  }
+
+  handleChoreSubmit(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const assigned = fd.getAll('assign');
+    const entry = { name: fd.get('name'), price: parseFloat(fd.get('price')), type: fd.get('type'), assigned };
+    this.setState(s => {
+      if (s.editingChoreId) {
+        return { chores: s.chores.map(c => c.id === s.editingChoreId ? { ...c, ...entry } : c), addChoreOpen: false, editingChoreId: null };
+      }
+      return { chores: [...s.chores, { id: Date.now(), ...entry }], addChoreOpen: false };
+    });
+  }
+
+  handleChildSubmit(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const id = fd.get('name').toLowerCase().replace(/[^a-zäö]/g, '') + Date.now();
+    this.setState(s => ({ children: [...s.children, { id, name: fd.get('name'), age: null }], addChildOpen: false }));
+  }
+
+  handleCreateFamily(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const id = 'p' + Date.now();
+    this.setState(s => ({ parents: [...s.parents, { id, name: fd.get('name') }], familyName: fd.get('family') || s.familyName, myName: fd.get('name') || s.myName, setupStage: 'manage' }));
+  }
+
+  handleAbsenceSubmit(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const from = new Date(fd.get('from')).toLocaleDateString('fi-FI');
+    const to = new Date(fd.get('to')).toLocaleDateString('fi-FI');
+    const cid = this.state.profileChildId;
+    this.setState(s => ({
+      profiles: { ...s.profiles, [cid]: { ...s.profiles[cid], absences: [...s.profiles[cid].absences, { type: fd.get('atype'), range: from === to ? from : from + ' – ' + to }] } },
+      absenceOpen: false
+    }));
+  }
+
+  updateDayAssignment(choreId, day, value) {
+    this.setState(s => ({ weeklyPlan: { ...s.weeklyPlan, [choreId]: { ...s.weeklyPlan[choreId], [day]: value } } }));
+  }
+
+  updateWeeklyAssignment(choreId, value) {
+    this.setState(s => ({ weeklyPlan: { ...s.weeklyPlan, [choreId]: { all: value } } }));
+  }
+
+  handlePaySubmit(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const cid = this.state.profileChildId;
+    const profile = this.state.profiles[cid];
+    const max = profile.ansaittu - profile.maksettu;
+    const amount = Math.min(parseFloat(fd.get('amount')) || 0, max);
+    const date = new Date().toLocaleDateString('fi-FI');
+    this.setState(s => ({
+      profiles: { ...s.profiles, [cid]: { ...s.profiles[cid], maksettu: s.profiles[cid].maksettu + amount, payments: [...s.profiles[cid].payments, { date, amount }] } },
+      payOpen: false
+    }));
+  }
+
+  copyInvite() {
+    navigator.clipboard?.writeText('https://kotihommat.app/kutsu/vir83k').catch(() => {});
+    this.setState({ copyLabel: 'Kopioitu!' });
+    setTimeout(() => this.setState({ copyLabel: 'Kopioi linkki' }), 1800);
+  }
+
+  renderVals() {
+    const s = this.state;
+    const isChild = s.role === 'lapsi';
+
+    const rootStyle = { ...(isChild ? CHILD_ACCENT : {}), ...(s.darkMode ? DARK : {}), display: 'contents' };
+
+    const todayDef = s.helmiTasks[TODAY_KEY];
+    const pendingCount = todayDef.filter(t => t.status === 'tekematon').length;
+    const todayTasks = todayDef.map(t => ({
+      id: t.id, name: t.name, priceLabel: fmtEur(t.price),
+      checked: t.status === 'tehty', locked: false,
+      strike: t.status === 'tehty' ? 'line-through' : 'none',
+      toggleFn: () => this.toggleTask(TODAY_KEY, t.id)
+    }));
+
+    const statusMeta = {
+      tehty: { label: 'Tehty', tag: 'tag-accent' },
+      tekematon: { label: 'Tekemättä', tag: 'tag-outline' },
+      merkitty: { label: 'Poissa', tag: 'tag-neutral' }
+    };
+    const weekView = WEEK_DAYS.map(d => ({
+      label: d.label, date: d.date, isToday: d.key === TODAY_KEY,
+      tasks: s.helmiTasks[d.key].map(t => ({ name: t.name, statusLabel: statusMeta[t.status].label, tagClass: statusMeta[t.status].tag }))
+    }));
+
+    const ansaittu = 18.5, maksettu = 12;
+    const balance = { ansaittuLabel: fmtEur(ansaittu), maksettuLabel: fmtEur(maksettu), odottaaLabel: fmtEur(ansaittu - maksettu), paidPct: Math.round(maksettu / ansaittu * 100) };
+
+    const typeLabels = { paivittainen: 'Päivittäin', viikoittainen: 'Viikoittain', kertaluontoinen: 'Kerran' };
+    const childName = id => (s.children.find(c => c.id === id) || {}).name || id;
+    const allMembers = [...s.parents, ...s.children];
+    const memberName = id => (allMembers.find(m => m.id === id) || {}).name || id;
+    const memberShort = id => memberName(id).slice(0, 3);
+    const choresList = s.chores.map(c => ({
+      id: c.id, name: c.name, priceLabel: fmtEur(c.price), typeLabel: typeLabels[c.type],
+      assignedNames: c.assigned.map(memberName).join(', '),
+      editFn: () => this.setState({ addChoreOpen: true, editingChoreId: c.id }),
+      deleteFn: () => this.setState(st => ({ chores: st.chores.filter(x => x.id !== c.id) }))
+    }));
+
+    const editingChoreRaw = s.editingChoreId ? s.chores.find(c => c.id === s.editingChoreId) : null;
+    const editingChore = editingChoreRaw
+      ? { name: editingChoreRaw.name, price: editingChoreRaw.price, isPaivittainen: editingChoreRaw.type === 'paivittainen', isViikoittainen: editingChoreRaw.type === 'viikoittainen', isKertaluontoinen: editingChoreRaw.type === 'kertaluontoinen' }
+      : { name: '', price: '', isPaivittainen: true, isViikoittainen: false, isKertaluontoinen: false };
+    const choreAssignOptions = allMembers.map(c => ({ id: c.id, name: c.name, checked: editingChoreRaw ? editingChoreRaw.assigned.includes(c.id) : false }));
+
+    const familyMembers = [
+      ...s.parents.map(p => ({ initial: p.name[0], name: p.name, meta: 'Vanhempi', roleLabel: 'Vanhempi', tagClass: 'tag-outline' })),
+      ...s.children.map(c => ({ initial: c.name[0], name: c.name, meta: c.age ? c.age + ' vuotta' : 'Lapsi', roleLabel: 'Lapsi', tagClass: 'tag-accent' }))
+    ];
+
+    const profileTabs = s.children.map(c => ({ id: c.id, name: c.name, active: c.id === s.profileChildId, selectFn: () => this.setState({ profileChildId: c.id }) }));
+    const pMeta = { full: { label: 'Valmis', tag: 'tag-accent' }, partial: { label: 'Kesken', tag: 'tag-outline' }, future: { label: '–', tag: 'tag-neutral' }, poissa: { label: 'Poissa', tag: 'tag-neutral' } };
+    const rawProfile = s.profiles[s.profileChildId];
+    const selectedProfile = {
+      name: childName(s.profileChildId),
+      grid: rawProfile.grid.map((st, i) => ({ short: WEEK_DAYS[i].short, statusLabel: pMeta[st].label, tagClass: pMeta[st].tag })),
+      ansaittuLabel: fmtEur(rawProfile.ansaittu), maksettuLabel: fmtEur(rawProfile.maksettu), odottaaLabel: fmtEur(rawProfile.ansaittu - rawProfile.maksettu),
+      odottaaRaw: Math.round((rawProfile.ansaittu - rawProfile.maksettu) * 100) / 100,
+      nothingToPay: rawProfile.ansaittu - rawProfile.maksettu <= 0,
+      absences: rawProfile.absences, noAbsences: rawProfile.absences.length === 0,
+      payments: rawProfile.payments.map(p => ({ date: p.date, amountLabel: fmtEur(p.amount) })), noPayments: rawProfile.payments.length === 0
+    };
+
+    const childNav = [
+      { key: 'tanaan', label: 'Tänään', icon: ICONS.home },
+      { key: 'viikko', label: 'Viikko', icon: ICONS.calendar },
+      { key: 'saldo', label: 'Saldo', icon: ICONS.piggy }
+    ];
+    const parentNav = [
+      { key: 'kotityot', label: 'Kotityöt', icon: ICONS.list },
+      { key: 'perhe', label: 'Perhe', icon: ICONS.users },
+      { key: 'profiilit', label: 'Profiilit', icon: ICONS.user }
+    ];
+    const activeScreen = isChild ? s.childScreen : s.parentScreen;
+    const navItems = (isChild ? childNav : parentNav).map(n => ({
+      label: n.label, iconHtml: { __html: n.icon },
+      color: n.key === activeScreen ? 'var(--color-accent)' : 'var(--color-text)',
+      borderColor: n.key === activeScreen ? 'var(--color-accent)' : 'transparent',
+      selectFn: () => isChild ? this.setState({ childScreen: n.key }) : this.setState({ parentScreen: n.key })
+    }));
+
+    return {
+      rootStyle,
+      onboardingDone: s.onboardingDone,
+      setupStageIsCreate: s.setupStage === 'create',
+      handleCreateFamily: e => this.handleCreateFamily(e),
+      familyName: s.familyName,
+      setupFamilyLabel: 'Perhe ' + s.familyName,
+      finishFamilySetup: () => this.setState({ onboardingDone: true, role: 'vanhempi' }),
+      roleLabel: isChild ? 'Lapsi' : 'Vanhempi',
+      familyBadgeLabel: isChild ? 'Helmi' : s.myName,
+      toggleRole: () => this.setState({ role: isChild ? 'vanhempi' : 'lapsi' }),
+      settingsOpen: s.settingsOpen,
+      openSettings: () => this.setState({ settingsOpen: true }),
+      closeSettings: () => this.setState({ settingsOpen: false }),
+      darkMode: s.darkMode,
+      toggleDarkMode: () => this.setState(st => ({ darkMode: !st.darkMode })),
+      notifEnabled: s.notifEnabled,
+      toggleNotif: () => this.setState(st => ({ notifEnabled: !st.notifEnabled })),
+      reminderTime: s.reminderTime,
+      setReminderTime: e => this.setState({ reminderTime: e.target.value }),
+
+      showChildToday: isChild && s.childScreen === 'tanaan',
+      showChildWeek: isChild && s.childScreen === 'viikko',
+      showChildBalance: isChild && s.childScreen === 'saldo',
+      showParentChores: !isChild && s.parentScreen === 'kotityot',
+      showParentFamily: !isChild && s.parentScreen === 'perhe',
+      showParentProfiles: !isChild && s.parentScreen === 'profiilit',
+
+      todayLabel: 'Tänään · Keskiviikko',
+      showBanner: pendingCount > 0 && !s.bannerDismissed,
+      bannerText: pendingCount === 1 ? 'Sinulla on 1 tekemätön tehtävä tänään' : 'Sinulla on ' + pendingCount + ' tekemätöntä tehtävää tänään',
+      dismissBanner: () => this.setState({ bannerDismissed: true }),
+      todayTasks,
+
+      weekLabel: 'Viikko 38',
+      weekView,
+
+      balance,
+
+      choresList,
+      choresViewIsLista: s.choresView === 'lista',
+      choresViewIsSuunnittelu: s.choresView === 'suunnittelu',
+      setChoresViewLista: () => this.setState({ choresView: 'lista' }),
+      setChoresViewSuunnittelu: () => this.setState({ choresView: 'suunnittelu' }),
+      plannerWeekLabel: 'viikkoa ' + s.plannerWeek,
+      prevPlannerWeek: () => this.setState(st => ({ plannerWeek: st.plannerWeek - 1 })),
+      nextPlannerWeek: () => this.setState(st => ({ plannerWeek: st.plannerWeek + 1 })),
+      plannerSaveLabel: s.plannerSaved ? 'Tallennettu ✓' : 'Tallenna viikko',
+      savePlannerWeek: () => { this.setState({ plannerSaved: true }); setTimeout(() => this.setState({ plannerSaved: false }), 1800); },
+      plannerRows: s.chores.filter(c => c.type !== 'kertaluontoinen').map(c => {
+        const options = c.assigned.map(id => ({ id, name: memberName(id), short: memberShort(id) }));
+        const plan = s.weeklyPlan[c.id] || {};
+        const isDaily = c.type === 'paivittainen';
+        return {
+          id: c.id, name: c.name, priceLabel: fmtEur(c.price), isDaily, options,
+          days: isDaily ? WEEK_DAYS.map(d => ({
+            key: d.key, short: d.short, value: plan[d.key] || options[0].id, options,
+            setFn: e => this.updateDayAssignment(c.id, d.key, e.target.value)
+          })) : [],
+          singleValue: !isDaily ? (plan.all || options[0].id) : undefined,
+          setSingleFn: e => this.updateWeeklyAssignment(c.id, e.target.value)
+        };
+      }),
+      openAddChore: () => this.setState({ addChoreOpen: true, editingChoreId: null }),
+      closeAddChore: () => this.setState({ addChoreOpen: false, editingChoreId: null }),
+      addChoreOpen: s.addChoreOpen,
+      choreDialogTitle: s.editingChoreId ? 'Muokkaa kotityötä' : 'Lisää kotityö',
+      editingChore, editingChoreKey: s.editingChoreId || 'new',
+      choreAssignOptions,
+      handleChoreSubmit: e => this.handleChoreSubmit(e),
+
+      familyMembers,
+      addChildOpen: s.addChildOpen,
+      openAddChild: () => this.setState({ addChildOpen: true }),
+      closeAddChild: () => this.setState({ addChildOpen: false }),
+      handleChildSubmit: e => this.handleChildSubmit(e),
+      inviteOpen: s.inviteOpen,
+      openInvite: () => this.setState({ inviteOpen: true }),
+      closeInvite: () => this.setState({ inviteOpen: false }),
+      inviteLink: 'https://kotihommat.app/kutsu/vir83k',
+      copyLabel: s.copyLabel,
+      copyInvite: () => this.copyInvite(),
+
+      profileTabs, selectedProfile,
+      absenceOpen: s.absenceOpen,
+      openAbsence: () => this.setState({ absenceOpen: true }),
+      closeAbsence: () => this.setState({ absenceOpen: false }),
+      handleAbsenceSubmit: e => this.handleAbsenceSubmit(e),
+      payOpen: s.payOpen,
+      openPay: () => this.setState({ payOpen: true }),
+      closePay: () => this.setState({ payOpen: false }),
+      handlePaySubmit: e => this.handlePaySubmit(e),
+
+      navItems
+    };
+  }
+}
+
+</script>
+</body>
+</html>
