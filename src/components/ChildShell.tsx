@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Home, CalendarDays, PiggyBank, Settings } from 'lucide-react'
-import { TodayView } from '@/pages/child/TodayView'
+import { TodayView, Task } from '@/pages/child/TodayView'
+import { WeekView } from '@/pages/child/WeekView'
 
 type Tab = 'today' | 'week' | 'balance'
 
@@ -9,8 +10,45 @@ interface Props {
   onRoleToggle: () => void
 }
 
+function dateOffset(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+const TODAY = new Date().toISOString().slice(0, 10)
+
+const INITIAL_WEEK_TASKS: Task[] = [
+  // Eilen — kaikki tehty
+  { id: 'y1', name: 'Astianpesukoneen tyhjennys', priceCents: 50, date: dateOffset(-1), status: 'tehty' },
+  { id: 'y2', name: 'Koiran ulkoilutus', priceCents: 100, date: dateOffset(-1), status: 'tehty' },
+  // Tänään
+  { id: 't1', name: 'Astianpesukoneen tyhjennys', priceCents: 50, date: TODAY, status: 'tekematon' },
+  { id: 't2', name: 'Koiran ulkoilutus', priceCents: 100, date: TODAY, status: 'tekematon' },
+  { id: 't3', name: 'Roskat ulos', priceCents: 50, date: TODAY, status: 'tehty' },
+  // Ylihuomenna — poissa
+  { id: 'a1', name: 'Koiran ulkoilutus', priceCents: 100, date: dateOffset(2), status: 'poissa' },
+  { id: 'a2', name: 'Astianpesukoneen tyhjennys', priceCents: 50, date: dateOffset(2), status: 'poissa' },
+  // +3 päivää
+  { id: 'b1', name: 'Roskat ulos', priceCents: 50, date: dateOffset(3), status: 'tekematon' },
+  { id: 'b2', name: 'Koiran ulkoilutus', priceCents: 100, date: dateOffset(3), status: 'tekematon' },
+]
+
 export function ChildShell({ childName, onRoleToggle }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('today')
+  const [tasks, setTasks] = useState<Task[]>(INITIAL_WEEK_TASKS)
+
+  const todayTasks = tasks.filter(t => t.date === TODAY)
+
+  const handleToggle = (id: string) => {
+    setTasks(prev =>
+      prev.map(t =>
+        t.id === id
+          ? { ...t, status: t.status === 'tehty' ? 'tekematon' : 'tehty' }
+          : t
+      )
+    )
+  }
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'today', label: 'Tänään', icon: <Home size={20} /> },
@@ -47,12 +85,8 @@ export function ChildShell({ childName, onRoleToggle }: Props) {
       </header>
 
       <main style={{ flex: 1, overflowY: 'auto' }}>
-        {activeTab === 'today' && <TodayView />}
-        {activeTab === 'week' && (
-          <div style={{ padding: 'var(--space-4)' }}>
-            <p className="text-muted">Viikkonäkymä tulossa.</p>
-          </div>
-        )}
+        {activeTab === 'today' && <TodayView tasks={todayTasks} onToggle={handleToggle} />}
+        {activeTab === 'week' && <WeekView tasks={tasks} today={TODAY} />}
         {activeTab === 'balance' && (
           <div style={{ padding: 'var(--space-4)' }}>
             <p className="text-muted">Oma saldo tulossa.</p>
