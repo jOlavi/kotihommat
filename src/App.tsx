@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { OnboardingView } from '@/pages/onboarding/OnboardingView'
 import { ChildShell } from '@/components/ChildShell'
+import { ParentShell } from '@/components/ParentShell'
 
 interface FamilyState {
   creatorName: string
@@ -41,28 +42,13 @@ export default function App() {
           onRoleToggle={() => setRole('parent')}
         />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <header className="nav" style={{ padding: 'var(--space-3) var(--space-4)', flex: 'none' }}>
-            <span className="nav-brand" style={{ fontSize: 16 }}>Kotihommat</span>
-            <button
-              type="button"
-              className="tag tag-accent"
-              style={{
-                border: 'none',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-heading)',
-                fontWeight: 600,
-                marginLeft: 'var(--space-2)',
-              }}
-              onClick={() => setRole('child')}
-            >
-              {family.creatorName}
-            </button>
-          </header>
-          <main style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4)' }}>
-            <p className="text-muted">Vanhempanäkymä tulossa.</p>
-          </main>
-        </div>
+        <ParentShell
+          family={family}
+          onAddMember={member =>
+            setFamily(f => f && { ...f, members: [...f.members, member] })
+          }
+          onRoleToggle={() => setRole('child')}
+        />
       )}
     </div>
   )
