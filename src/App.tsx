@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { OnboardingView } from '@/pages/onboarding/OnboardingView'
+import { ChildShell } from '@/components/ChildShell'
 
 interface FamilyState {
   creatorName: string
@@ -7,8 +8,13 @@ interface FamilyState {
   members: { name: string; role: 'parent' | 'child' }[]
 }
 
+type Role = 'parent' | 'child'
+
 export default function App() {
   const [family, setFamily] = useState<FamilyState | null>(null)
+  const [role, setRole] = useState<Role>('child')
+
+  const childName = family?.members.find(m => m.role === 'child')?.name ?? 'Lapsi'
 
   return (
     <div
@@ -29,21 +35,34 @@ export default function App() {
             setFamily({ creatorName, familyName, members })
           }
         />
+      ) : role === 'child' ? (
+        <ChildShell
+          childName={childName}
+          onRoleToggle={() => setRole('parent')}
+        />
       ) : (
-        <>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <header className="nav" style={{ padding: 'var(--space-3) var(--space-4)', flex: 'none' }}>
             <span className="nav-brand" style={{ fontSize: 16 }}>Kotihommat</span>
             <button
+              type="button"
               className="tag tag-accent"
-              style={{ border: 'none', cursor: 'pointer', fontFamily: 'var(--font-heading)', fontWeight: 600 }}
+              style={{
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-heading)',
+                fontWeight: 600,
+                marginLeft: 'var(--space-2)',
+              }}
+              onClick={() => setRole('child')}
             >
               {family.creatorName}
             </button>
           </header>
           <main style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4)' }}>
-            <p className="text-muted">Tervetuloa, {family.creatorName}! Näkymät tulossa.</p>
+            <p className="text-muted">Vanhempanäkymä tulossa.</p>
           </main>
-        </>
+        </div>
       )}
     </div>
   )
