@@ -57,8 +57,21 @@ export function ChildShell({ childName, onRoleToggle }: Props) {
     { id: 'balance', label: 'Oma saldo', icon: <PiggyBank size={20} /> },
   ]
 
+  const childTheme: React.CSSProperties = {
+    '--color-accent':     'oklch(58% 0.11 220)',
+    '--color-accent-100': 'oklch(96% 0.015 220)',
+    '--color-accent-200': 'oklch(91% 0.03 220)',
+    '--color-accent-300': 'oklch(84% 0.05 220)',
+    '--color-accent-400': 'oklch(74% 0.08 220)',
+    '--color-accent-500': 'oklch(64% 0.10 220)',
+    '--color-accent-600': 'oklch(55% 0.11 220)',
+    '--color-accent-700': 'oklch(45% 0.10 220)',
+    '--color-accent-800': 'oklch(34% 0.08 220)',
+    '--color-accent-900': 'oklch(24% 0.06 220)',
+  } as React.CSSProperties
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ ...childTheme, display: 'flex', flexDirection: 'column', height: '100%' }}>
       <header className="nav" style={{ padding: 'var(--space-3) var(--space-4)', flex: 'none' }}>
         <span className="nav-brand" style={{ fontSize: 16 }}>Kotihommat</span>
         <button
