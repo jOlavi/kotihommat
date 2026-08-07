@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ListChecks, Users, UserCircle, Settings } from 'lucide-react'
 import { FamilyView } from '@/pages/parent/FamilyView'
+import { ChoresView } from '@/pages/parent/ChoresView'
 
 interface Family {
   creatorName: string
@@ -55,9 +56,9 @@ export function ParentShell({ family, onAddMember, onRoleToggle }: Props) {
 
       <main style={{ flex: 1, overflowY: 'auto' }}>
         {activeTab === 'chores' && (
-          <div style={{ padding: 'var(--space-4)' }}>
-            <p className="text-muted">Kotityöt tulossa.</p>
-          </div>
+          <ChoresView
+            childNames={family.members.filter(m => m.role === 'child').map(m => m.name)}
+          />
         )}
         {activeTab === 'family' && (
           <FamilyView
