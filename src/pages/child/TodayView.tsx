@@ -1,34 +1,31 @@
 import { useState } from 'react'
 import { TriangleAlert, X, Bell } from 'lucide-react'
 
-interface Task {
+export type MockStatus = 'tehty' | 'tekematon' | 'poissa'
+
+export interface Task {
   id: string
   name: string
   priceCents: number
-  done: boolean
+  date: string
+  status: MockStatus
 }
 
-const INITIAL_TASKS: Task[] = [
-  { id: '1', name: 'Astianpesukoneen tyhjennys', priceCents: 50, done: false },
-  { id: '2', name: 'Koiran ulkoilutus', priceCents: 100, done: false },
-  { id: '3', name: 'Roskat ulos', priceCents: 50, done: true },
-]
+interface Props {
+  tasks: Task[]
+  onToggle: (id: string) => void
+}
 
 function formatPrice(cents: number): string {
   return (cents / 100).toLocaleString('fi-FI', { minimumFractionDigits: 2 })
 }
 
-export function TodayView() {
-  const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS)
+export function TodayView({ tasks, onToggle }: Props) {
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const reminderTime: string | null = null
 
-  const undoneCount = tasks.filter(t => !t.done).length
+  const undoneCount = tasks.filter(t => t.status === 'tekematon').length
   const showBanner = !bannerDismissed && undoneCount > 0
-
-  const toggleTask = (id: string) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t))
-  }
 
   return (
     <div style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
@@ -81,13 +78,14 @@ export function TodayView() {
           >
             <input
               type="checkbox"
-              checked={task.done}
-              onChange={() => toggleTask(task.id)}
+              checked={task.status === 'tehty'}
+              disabled={task.status === 'poissa'}
+              onChange={() => task.status !== 'poissa' && onToggle(task.id)}
               style={{
                 width: 22,
                 height: 22,
                 accentColor: 'var(--color-accent)',
-                cursor: 'pointer',
+                cursor: task.status === 'poissa' ? 'not-allowed' : 'pointer',
                 flex: 'none',
               }}
             />
@@ -95,8 +93,8 @@ export function TodayView() {
               style={{
                 flex: 1,
                 fontSize: 15,
-                textDecoration: task.done ? 'line-through' : 'none',
-                opacity: task.done ? 0.5 : 1,
+                textDecoration: task.status === 'tehty' ? 'line-through' : 'none',
+                opacity: task.status === 'tehty' ? 0.5 : 1,
               }}
             >
               {task.name}
