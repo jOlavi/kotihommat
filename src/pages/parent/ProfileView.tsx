@@ -49,10 +49,15 @@ function makeDefaultProfile(): ChildProfile {
 
 interface Props {
   childNames: string[]
+  initialChild?: string
 }
 
-export function ProfileView({ childNames }: Props) {
-  const [selectedName, setSelectedName] = useState(childNames[0] ?? '')
+export function ProfileView({ childNames, initialChild }: Props) {
+  const [selectedName, setSelectedName] = useState(
+    () => (initialChild && childNames.includes(initialChild))
+      ? initialChild
+      : (childNames[0] ?? '')
+  )
   const [profiles, setProfiles] = useState<Record<string, ChildProfile>>(() =>
     Object.fromEntries(childNames.map(n => [n, makeDefaultProfile()]))
   )
