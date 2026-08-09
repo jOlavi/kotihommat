@@ -3,7 +3,8 @@ import { ListChecks, Calendar, Users, UserCircle, Wallet, Settings } from 'lucid
 import { FamilyView } from '@/pages/parent/FamilyView'
 import { ChoresView, WeekAssignment } from '@/pages/parent/ChoresView'
 import { WeekView } from '@/pages/parent/WeekView'
-import { ProfileView } from '@/pages/parent/ProfileView'
+import { ProfileView, ChildProfile, makeDefaultProfile } from '@/pages/parent/ProfileView'
+import { PayView } from '@/pages/parent/PayView'
 import { Chore } from '@/pages/parent/ChoreDialog'
 
 const INITIAL_CHORES: Chore[] = [
@@ -31,6 +32,14 @@ export function ParentShell({ family, onAddMember, onRoleToggle }: Props) {
   const [chores, setChores] = useState<Chore[]>(INITIAL_CHORES)
   const [weeklyPlans, setWeekPlans] = useState<Record<string, WeekAssignment[]>>({})
   const [profileChildId, setProfileChildId] = useState('')
+  const [profiles, setProfiles] = useState<Record<string, ChildProfile>>(() =>
+    Object.fromEntries(
+      family.members.filter(m => m.role === 'child').map(m => [m.name, makeDefaultProfile()])
+    )
+  )
+
+  const updateProfile = (name: string, fn: (p: ChildProfile) => ChildProfile) =>
+    setProfiles(prev => ({ ...prev, [name]: fn(prev[name] ?? makeDefaultProfile()) }))
 
   const childNames = family.members.filter(m => m.role === 'child').map(m => m.name)
 
@@ -98,12 +107,16 @@ export function ParentShell({ family, onAddMember, onRoleToggle }: Props) {
           <ProfileView
             childNames={childNames}
             initialChild={profileChildId}
+            profiles={profiles}
+            updateProfile={updateProfile}
           />
         )}
         {activeTab === 'maksut' && (
-          <div style={{ padding: 'var(--space-4)' }}>
-            <p className="text-muted">Maksut-näkymä tulossa.</p>
-          </div>
+          <PayView
+            childNames={childNames}
+            profiles={profiles}
+            updateProfile={updateProfile}
+          />
         )}
       </main>
 
