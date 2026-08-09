@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { ChoreDialog, Chore, ChoreFormData, ChoreType } from '@/pages/parent/ChoreDialog'
 
-type DayKey = 'ma' | 'ti' | 'ke' | 'to' | 'pe' | 'la' | 'su'
+export type DayKey = 'ma' | 'ti' | 'ke' | 'to' | 'pe' | 'la' | 'su'
 
 const DAY_KEYS: DayKey[] = ['ma', 'ti', 'ke', 'to', 'pe', 'la', 'su']
 const DAY_SHORTS: Record<DayKey, string> = {
@@ -14,7 +14,7 @@ const TYPE_LABELS: Record<ChoreType, string> = {
   kertaluontoinen: 'Kerran',
 }
 
-interface WeekAssignment {
+export interface WeekAssignment {
   choreId: string
   days: Record<DayKey, string>
   all: string
@@ -22,13 +22,11 @@ interface WeekAssignment {
 
 interface Props {
   childNames: string[]
+  chores: Chore[]
+  setChores: React.Dispatch<React.SetStateAction<Chore[]>>
+  weeklyPlans: Record<string, WeekAssignment[]>
+  setWeekPlans: React.Dispatch<React.SetStateAction<Record<string, WeekAssignment[]>>>
 }
-
-const INITIAL_CHORES: Chore[] = [
-  { id: 'c1', name: 'Astianpesukoneen tyhjennys', priceCents: 50, type: 'paivittainen', assignedChildNames: [] },
-  { id: 'c2', name: 'Koiran ulkoilutus', priceCents: 100, type: 'paivittainen', assignedChildNames: [] },
-  { id: 'c3', name: 'Roskat ulos', priceCents: 50, type: 'viikoittainen', assignedChildNames: [] },
-]
 
 function emptyDays(): Record<DayKey, string> {
   return { ma: '', ti: '', ke: '', to: '', pe: '', la: '', su: '' }
@@ -57,11 +55,9 @@ function formatPrice(cents: number): string {
   return (cents / 100).toLocaleString('fi-FI', { minimumFractionDigits: 2 })
 }
 
-export function ChoresView({ childNames }: Props) {
-  const [chores, setChores] = useState<Chore[]>(INITIAL_CHORES)
+export function ChoresView({ childNames, chores, setChores, weeklyPlans, setWeekPlans }: Props) {
   const [view, setView] = useState<'lista' | 'suunnittelu'>('lista')
   const [weekOffset, setWeekOffset] = useState(0)
-  const [weekPlans, setWeekPlans] = useState<Record<string, WeekAssignment[]>>({})
   const [plannerDraft, setPlannerDraft] = useState<WeekAssignment[]>([])
   const [plannerSaved, setPlannerSaved] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -69,7 +65,7 @@ export function ChoresView({ childNames }: Props) {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    const saved = weekPlans[getWeekId(weekOffset)]
+    const saved = weeklyPlans[getWeekId(weekOffset)]
     const plannerChores = chores.filter(c => c.type !== 'kertaluontoinen')
     setPlannerDraft(
       plannerChores.map(c => {
@@ -125,21 +121,11 @@ export function ChoresView({ childNames }: Props) {
 
       <div className="seg" style={{ width: '100%', marginBottom: 'var(--space-4)' }}>
         <label className="seg-opt" style={{ flex: 1, justifyContent: 'center' }}>
-          <input
-            type="radio"
-            name="choresview"
-            checked={view === 'lista'}
-            onChange={() => setView('lista')}
-          />
+          <input type="radio" name="choresview" checked={view === 'lista'} onChange={() => setView('lista')} />
           Lista
         </label>
         <label className="seg-opt" style={{ flex: 1, justifyContent: 'center' }}>
-          <input
-            type="radio"
-            name="choresview"
-            checked={view === 'suunnittelu'}
-            onChange={() => setView('suunnittelu')}
-          />
+          <input type="radio" name="choresview" checked={view === 'suunnittelu'} onChange={() => setView('suunnittelu')} />
           Viikkosuunnittelu
         </label>
       </div>
@@ -165,20 +151,10 @@ export function ChoresView({ childNames }: Props) {
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ flex: 1 }}
-                  onClick={() => openEdit(c)}
-                >
+                <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => openEdit(c)}>
                   <Pencil size={13} /> Muokkaa
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ flex: 1, color: 'var(--color-accent-800)' }}
-                  onClick={() => handleDelete(c.id)}
-                >
+                <button type="button" className="btn btn-secondary" style={{ flex: 1, color: 'var(--color-accent-800)' }} onClick={() => handleDelete(c.id)}>
                   <Trash2 size={13} /> Poista
                 </button>
               </div>
@@ -190,23 +166,13 @@ export function ChoresView({ childNames }: Props) {
       {view === 'suunnittelu' && (
         <>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-1)' }}>
-            <button
-              type="button"
-              className="btn btn-ghost btn-icon"
-              aria-label="Edellinen viikko"
-              onClick={() => setWeekOffset(o => o - 1)}
-            >
+            <button type="button" className="btn btn-ghost btn-icon" aria-label="Edellinen viikko" onClick={() => setWeekOffset(o => o - 1)}>
               <ChevronLeft size={15} />
             </button>
             <h5 style={{ margin: 0, fontSize: 15 }}>
               Suunnittele Viikko {getISOWeek(getWeekDate(weekOffset))}
             </h5>
-            <button
-              type="button"
-              className="btn btn-ghost btn-icon"
-              aria-label="Seuraava viikko"
-              onClick={() => setWeekOffset(o => o + 1)}
-            >
+            <button type="button" className="btn btn-ghost btn-icon" aria-label="Seuraava viikko" onClick={() => setWeekOffset(o => o + 1)}>
               <ChevronRight size={15} />
             </button>
           </div>
