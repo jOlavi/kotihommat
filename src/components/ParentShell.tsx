@@ -1,8 +1,16 @@
 import { useState } from 'react'
-import { ListChecks, Users, UserCircle, Settings } from 'lucide-react'
+import { ListChecks, Calendar, Users, UserCircle, Wallet, Settings } from 'lucide-react'
 import { FamilyView } from '@/pages/parent/FamilyView'
-import { ChoresView } from '@/pages/parent/ChoresView'
+import { ChoresView, WeekAssignment } from '@/pages/parent/ChoresView'
+import { WeekView } from '@/pages/parent/WeekView'
 import { ProfileView } from '@/pages/parent/ProfileView'
+import { Chore } from '@/pages/parent/ChoreDialog'
+
+const INITIAL_CHORES: Chore[] = [
+  { id: 'c1', name: 'Astianpesukoneen tyhjennys', priceCents: 50, type: 'paivittainen', assignedChildNames: [] },
+  { id: 'c2', name: 'Koiran ulkoilutus', priceCents: 100, type: 'paivittainen', assignedChildNames: [] },
+  { id: 'c3', name: 'Roskat ulos', priceCents: 50, type: 'viikoittainen', assignedChildNames: [] },
+]
 
 interface Family {
   creatorName: string
@@ -16,15 +24,22 @@ interface Props {
   onRoleToggle: () => void
 }
 
-type Tab = 'chores' | 'family' | 'profile'
+type Tab = 'chores' | 'viikko' | 'family' | 'lapset' | 'maksut'
 
 export function ParentShell({ family, onAddMember, onRoleToggle }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('chores')
+  const [chores, setChores] = useState<Chore[]>(INITIAL_CHORES)
+  const [weeklyPlans, setWeekPlans] = useState<Record<string, WeekAssignment[]>>({})
+  const [profileChildId, setProfileChildId] = useState('')
+
+  const childNames = family.members.filter(m => m.role === 'child').map(m => m.name)
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'chores', label: 'Kotityöt', icon: <ListChecks size={20} /> },
-    { id: 'family', label: 'Perhe', icon: <Users size={20} /> },
-    { id: 'profile', label: 'Lapsen profiili', icon: <UserCircle size={20} /> },
+    { id: 'viikko', label: 'Viikko',   icon: <Calendar size={20} /> },
+    { id: 'family', label: 'Perhe',    icon: <Users size={20} /> },
+    { id: 'lapset', label: 'Lapset',   icon: <UserCircle size={20} /> },
+    { id: 'maksut', label: 'Maksut',   icon: <Wallet size={20} /> },
   ]
 
   return (
@@ -58,7 +73,19 @@ export function ParentShell({ family, onAddMember, onRoleToggle }: Props) {
       <main style={{ flex: 1, overflowY: 'auto' }}>
         {activeTab === 'chores' && (
           <ChoresView
-            childNames={family.members.filter(m => m.role === 'child').map(m => m.name)}
+            childNames={childNames}
+            chores={chores}
+            setChores={setChores}
+            weeklyPlans={weeklyPlans}
+            setWeekPlans={setWeekPlans}
+          />
+        )}
+        {activeTab === 'viikko' && (
+          <WeekView
+            childNames={childNames}
+            chores={chores}
+            weeklyPlans={weeklyPlans}
+            onChildClick={name => { setProfileChildId(name); setActiveTab('lapset') }}
           />
         )}
         {activeTab === 'family' && (
@@ -67,10 +94,16 @@ export function ParentShell({ family, onAddMember, onRoleToggle }: Props) {
             onAddChild={name => onAddMember({ name, role: 'child' })}
           />
         )}
-        {activeTab === 'profile' && (
+        {activeTab === 'lapset' && (
           <ProfileView
-            childNames={family.members.filter(m => m.role === 'child').map(m => m.name)}
+            childNames={childNames}
+            initialChild={profileChildId}
           />
+        )}
+        {activeTab === 'maksut' && (
+          <div style={{ padding: 'var(--space-4)' }}>
+            <p className="text-muted">Maksut-näkymä tulossa.</p>
+          </div>
         )}
       </main>
 
