@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { AbsenceDialog } from '@/pages/parent/AbsenceDialog'
 import { Chore } from '@/pages/parent/ChoreDialog'
 import { DayKey, WeekAssignment } from '@/pages/parent/ChoresView'
+import { updateChildPinFn } from '@/lib/functions'
 
 export type DayStatus = 'full' | 'partial' | 'future' | 'poissa'
 
@@ -111,9 +112,14 @@ interface Props {
   updateProfile: (name: string, fn: (p: ChildProfile) => ChildProfile) => void
   chores: Chore[]
   weeklyPlans: Record<string, WeekAssignment[]>
+  familyId: string
+  firestoreMembers: Array<{ uid: string; firstName: string; username?: string; pin?: string }>
 }
 
-export function ProfileView({ childNames, initialChild, profiles, updateProfile, chores, weeklyPlans }: Props) {
+export function ProfileView({
+  childNames, initialChild, profiles, updateProfile,
+  chores, weeklyPlans, familyId, firestoreMembers
+}: Props) {
   const [selectedName, setSelectedName] = useState(
     () => (initialChild && childNames.includes(initialChild))
       ? initialChild
@@ -121,6 +127,10 @@ export function ProfileView({ childNames, initialChild, profiles, updateProfile,
   )
   const [absenceOpen, setAbsenceOpen] = useState(false)
   const [weekOffset, setWeekOffset] = useState(0)
+  const [pinEditing, setPinEditing] = useState(false)
+  const [newPin, setNewPin] = useState('')
+  const [pinLoading, setPinLoading] = useState(false)
+  const [pinError, setPinError] = useState('')
 
   const handleAbsenceSave = (type: 'Loma' | 'Sairas', from: string, to: string) => {
     const fmt = (s: string) =>
@@ -159,6 +169,79 @@ export function ProfileView({ childNames, initialChild, profiles, updateProfile,
           </label>
         ))}
       </div>
+
+      {/* Kirjautumistiedot */}
+      {(() => {
+        const member = firestoreMembers.find(m => m.firstName === selectedName)
+        if (!member) return null
+        const displayUsername = member.username
+          ? (() => { const [n, c] = member.username!.split('.'); return `${n}.${(c ?? '').toUpperCase()}` })()
+          : '–'
+
+        const handleSavePin = async () => {
+          if (!/^\d{4}$/.test(newPin)) { setPinError('PIN tulee olla 4 numeroa'); return }
+          setPinLoading(true)
+          setPinError('')
+          try {
+            await updateChildPinFn({ childUid: member.uid, newPin, familyId })
+            setPinEditing(false)
+            setNewPin('')
+          } catch {
+            setPinError('PIN:n vaihto epäonnistui')
+          } finally {
+            setPinLoading(false)
+          }
+        }
+
+        return (
+          <div className="card" style={{ marginBottom: 'var(--space-4)', gap: 'var(--space-2)' }}>
+            <div className="card-kicker">Kirjautumistiedot</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}>
+                <span style={{ opacity: 0.6, width: 80 }}>Tunnus</span>
+                <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600 }}>{displayUsername}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}>
+                <span style={{ opacity: 0.6, width: 80 }}>PIN</span>
+                {pinEditing ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <input
+                      className="input"
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={4}
+                      placeholder="1234"
+                      value={newPin}
+                      onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      style={{ width: 80, padding: '2px 8px', fontSize: 13 }}
+                      autoFocus
+                    />
+                    <button type="button" className="btn btn-primary" style={{ padding: '2px 10px', fontSize: 12 }}
+                      onClick={handleSavePin} disabled={pinLoading || newPin.length !== 4}>
+                      Tallenna
+                    </button>
+                    <button type="button" className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: 12 }}
+                      onClick={() => { setPinEditing(false); setNewPin(''); setPinError('') }}>
+                      Peruuta
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, letterSpacing: '0.1em' }}>
+                      {member.pin ?? '••••'}
+                    </span>
+                    <button type="button" className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: 12 }}
+                      onClick={() => setPinEditing(true)}>
+                      Vaihda
+                    </button>
+                  </div>
+                )}
+              </div>
+              {pinError && <p style={{ fontSize: 12, color: 'oklch(50% 0.18 25)', margin: 0 }}>{pinError}</p>}
+            </div>
+          </div>
+        )
+      })()}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 'var(--space-4)' }}>
         {profile.weekGrid.map((status, i) => (

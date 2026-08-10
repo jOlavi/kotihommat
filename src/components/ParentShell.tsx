@@ -155,6 +155,8 @@ export function ParentShell({ familyId, creatorName, onSignOut }: Props) {
             updateProfile={updateProfile}
             chores={chores}
             weeklyPlans={weeklyPlans}
+            familyId={familyId}
+            firestoreMembers={firestoreMembers}
           />
         )}
         {activeTab === "maksut" && (
