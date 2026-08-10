@@ -81,6 +81,7 @@ export function ChildShell({ childName, onRoleToggle }: Props) {
             cursor: 'pointer',
             fontFamily: 'var(--font-heading)',
             fontWeight: 600,
+            fontSize: 15,
           }}
           onClick={onRoleToggle}
         >
