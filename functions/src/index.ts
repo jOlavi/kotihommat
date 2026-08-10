@@ -51,6 +51,7 @@ export const createChildAccount = onCall(
     const { firstName, pin, familyId } = request.data as {
       firstName: string; pin: string; familyId: string
     }
+    if (!familyId) throw new HttpsError('invalid-argument', 'Perheen tunniste vaaditaan')
     if (!firstName?.trim()) throw new HttpsError('invalid-argument', 'Nimi vaaditaan')
     if (!/^\d{4}$/.test(pin)) throw new HttpsError('invalid-argument', 'PIN tulee olla 4 numeroa')
 
@@ -60,16 +61,22 @@ export const createChildAccount = onCall(
     }
 
     const familyDoc = await db.doc(`families/${familyId}`).get()
-    const familyCode = familyDoc.data()?.familyCode as string
+    if (!familyDoc.exists) throw new HttpsError('not-found', 'Perhettä ei löydy')
+    const familyCode = familyDoc.data()!.familyCode as string
+    if (!familyCode) throw new HttpsError('internal', 'Perhekoodi puuttuu')
     const username = `${firstName.trim().toLowerCase()}.${familyCode.toLowerCase()}`
     const email = `${username}@kotihommat.app`
 
     const userRecord = await adminAuth.createUser({ email, displayName: firstName.trim() })
-    await adminAuth.setCustomUserClaims(userRecord.uid, { familyId, role: 'child' })
-    await db.doc(`families/${familyId}/members/${userRecord.uid}`).set({
-      firstName: firstName.trim(), role: 'child', username, pin, familyId,
-    })
-
+    try {
+      await adminAuth.setCustomUserClaims(userRecord.uid, { familyId, role: 'child' })
+      await db.doc(`families/${familyId}/members/${userRecord.uid}`).set({
+        firstName: firstName.trim(), role: 'child', username, pin, familyId,
+      })
+    } catch (err) {
+      await adminAuth.deleteUser(userRecord.uid).catch(() => undefined)
+      throw new HttpsError('internal', 'Lapsen tilin luonti epäonnistui')
+    }
     return { uid: userRecord.uid, username }
   }
 )
