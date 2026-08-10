@@ -53,7 +53,7 @@ export function ParentShell({ family, onAddMember, onRoleToggle }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <header className="nav" style={{ padding: 'var(--space-3) var(--space-4)', flex: 'none' }}>
+      <header className="nav" style={{ padding: 'var(--space-3) var(--space-4)', flex: 'none', position: 'relative' }}>
         <span className="nav-brand" style={{ fontSize: 16 }}>Kotihommat</span>
         <button
           type="button"
@@ -63,7 +63,9 @@ export function ParentShell({ family, onAddMember, onRoleToggle }: Props) {
             cursor: 'pointer',
             fontFamily: 'var(--font-heading)',
             fontWeight: 600,
-            marginLeft: 'var(--space-2)',
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
           }}
           onClick={onRoleToggle}
         >
