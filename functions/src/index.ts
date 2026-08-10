@@ -1,7 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { initializeApp } from 'firebase-admin/app'
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
-import { getAuth } from 'firebase-admin/auth'
+import { getAuth, UserRecord } from 'firebase-admin/auth'
 
 initializeApp()
 const db = getFirestore()
@@ -69,7 +69,17 @@ export const createChildAccount = onCall(
     const username = `${firstName.trim().toLowerCase()}.${familyCode.toLowerCase()}`
     const email = `${username}@kotihommat.app`
 
-    const userRecord = await adminAuth.createUser({ email, displayName: firstName.trim() })
+    // Fix 2: Detect duplicate child name and surface a clear error
+    let userRecord: UserRecord
+    try {
+      userRecord = await adminAuth.createUser({ email, displayName: firstName.trim() })
+    } catch (createError: unknown) {
+      const code = (createError as { code?: string }).code
+      if (code === 'auth/email-already-exists') {
+        throw new HttpsError('already-exists', 'Tällä nimellä on jo lapsi tässä perheessä')
+      }
+      throw createError
+    }
     try {
       await adminAuth.setCustomUserClaims(userRecord.uid, { familyId, role: 'child' })
       await db.doc(`families/${familyId}/members/${userRecord.uid}`).set({
@@ -87,18 +97,43 @@ export const childLogin = onCall(
   { region: 'europe-west1' },
   async (request) => {
     const { username, pin } = request.data as { username: string; pin: string }
+
+    // Fix 1: Input validation guard
+    if (typeof username !== 'string' || typeof pin !== 'string') {
+      throw new HttpsError('invalid-argument', 'Käyttäjätunnus ja PIN vaaditaan')
+    }
+
     const normalizedUsername = username.toLowerCase().trim()
 
-    // Rate limit check
+    // Fix 3: Wrap rate-limit counter mutation in a Firestore transaction
     const attemptRef = db.doc(`loginAttempts/${normalizedUsername}`)
-    const attemptDoc = await attemptRef.get()
 
-    if (attemptDoc.exists) {
-      const data = attemptDoc.data()!
-      const lockedUntil = data.lockedUntil as Timestamp | undefined
-      if (lockedUntil && lockedUntil.toDate() > new Date()) {
-        return { error: 'locked', lockedUntil: lockedUntil.toDate().toISOString() }
+    const rateLimitResult = await db.runTransaction(async (t) => {
+      const attemptDoc = await t.get(attemptRef)
+
+      if (attemptDoc.exists) {
+        const data = attemptDoc.data()!
+        const lockedUntil = data.lockedUntil as Timestamp | undefined
+        if (lockedUntil && lockedUntil.toDate() > new Date()) {
+          return { locked: true, lockedUntil: lockedUntil.toDate().toISOString() }
+        }
       }
+
+      // Not currently locked — increment count for a failed attempt optimistically;
+      // the caller will reset on success, so we pre-increment here and roll back
+      // if the PIN check passes (by deleting the doc on success).
+      // Actually: we only want to increment on failure — so we record current state
+      // and return it; the increment will be done after PIN check if needed.
+      const data = attemptDoc.exists ? attemptDoc.data()! : null
+      const previousLockExpired = data?.lockedUntil &&
+        (data.lockedUntil as Timestamp).toDate() <= new Date()
+      const currentCount = (data && !previousLockExpired) ? ((data.count as number) ?? 0) : 0
+
+      return { locked: false, currentCount, previousLockExpired: Boolean(previousLockExpired), attemptDocExists: attemptDoc.exists }
+    })
+
+    if (rateLimitResult.locked) {
+      throw new HttpsError('resource-exhausted', `Tili lukittu. Yritä uudelleen myöhemmin. Lukitus vanhenee: ${rateLimitResult.lockedUntil}`)
     }
 
     // Find member across all families by username
@@ -109,21 +144,24 @@ export const childLogin = onCall(
       .get()
 
     if (memberSnap.empty || memberSnap.docs[0].data().pin !== pin) {
-      const data = attemptDoc.exists ? attemptDoc.data()! : null
-      // Check if a previous lockout has already expired — if so, start fresh
-      const previousLockExpired = data?.lockedUntil &&
-        (data.lockedUntil as Timestamp).toDate() <= new Date()
-      const currentCount = (data && !previousLockExpired) ? ((data.count as number) ?? 0) : 0
-      const newCount = currentCount + 1
-      const update: Record<string, unknown> = { count: newCount }
-      if (!attemptDoc.exists || previousLockExpired) {
-        update.firstAttemptAt = FieldValue.serverTimestamp()
-        update.lockedUntil = FieldValue.delete()  // clear any stale lock
-      }
-      if (newCount >= 5) {
-        update.lockedUntil = Timestamp.fromDate(new Date(Date.now() + 15 * 60 * 1000))
-      }
-      await attemptRef.set(update, { merge: true })
+      // PIN check failed — atomically increment the attempt counter
+      await db.runTransaction(async (t) => {
+        const attemptDoc = await t.get(attemptRef)
+        const data = attemptDoc.exists ? attemptDoc.data()! : null
+        const previousLockExpired = data?.lockedUntil &&
+          (data.lockedUntil as Timestamp).toDate() <= new Date()
+        const currentCount = (data && !previousLockExpired) ? ((data.count as number) ?? 0) : 0
+        const newCount = currentCount + 1
+        const update: Record<string, unknown> = { count: newCount }
+        if (!attemptDoc.exists || previousLockExpired) {
+          update.firstAttemptAt = FieldValue.serverTimestamp()
+          update.lockedUntil = FieldValue.delete()  // clear any stale lock
+        }
+        if (newCount >= 5) {
+          update.lockedUntil = Timestamp.fromDate(new Date(Date.now() + 15 * 60 * 1000))
+        }
+        t.set(attemptRef, update, { merge: true })
+      })
       return { error: 'invalid-credentials' }
     }
 
