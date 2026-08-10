@@ -107,10 +107,17 @@ export const childLogin = onCall(
       .get()
 
     if (memberSnap.empty || memberSnap.docs[0].data().pin !== pin) {
-      const currentCount = attemptDoc.exists ? ((attemptDoc.data()?.count as number) ?? 0) : 0
+      const data = attemptDoc.exists ? attemptDoc.data()! : null
+      // Check if a previous lockout has already expired — if so, start fresh
+      const previousLockExpired = data?.lockedUntil &&
+        (data.lockedUntil as Timestamp).toDate() <= new Date()
+      const currentCount = (data && !previousLockExpired) ? ((data.count as number) ?? 0) : 0
       const newCount = currentCount + 1
       const update: Record<string, unknown> = { count: newCount }
-      if (!attemptDoc.exists) update.firstAttemptAt = FieldValue.serverTimestamp()
+      if (!attemptDoc.exists || previousLockExpired) {
+        update.firstAttemptAt = FieldValue.serverTimestamp()
+        update.lockedUntil = FieldValue.delete()  // clear any stale lock
+      }
       if (newCount >= 5) {
         update.lockedUntil = Timestamp.fromDate(new Date(Date.now() + 15 * 60 * 1000))
       }
