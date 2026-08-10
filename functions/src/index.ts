@@ -133,4 +133,20 @@ export const childLogin = onCall(
   }
 )
 
-// updateChildPin added in Task 4
+export const updateChildPin = onCall(
+  { region: 'europe-west1' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Kirjautuminen vaaditaan')
+    const { childUid, newPin, familyId } = request.data as {
+      childUid: string; newPin: string; familyId: string
+    }
+    if (!/^\d{4}$/.test(newPin)) throw new HttpsError('invalid-argument', 'PIN tulee olla 4 numeroa')
+
+    const callerDoc = await db.doc(`families/${familyId}/members/${request.auth.uid}`).get()
+    if (!callerDoc.exists || callerDoc.data()?.role !== 'parent') {
+      throw new HttpsError('permission-denied', 'Vain vanhempi voi vaihtaa PIN-koodin')
+    }
+
+    await db.doc(`families/${familyId}/members/${childUid}`).update({ pin: newPin })
+  }
+)
