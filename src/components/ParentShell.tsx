@@ -165,6 +165,8 @@ export function ParentShell({ family, onAddMember, onRoleToggle }: Props) {
             initialChild={profileChildId}
             profiles={profiles}
             updateProfile={updateProfile}
+            chores={chores}
+            weeklyPlans={weeklyPlans}
           />
         )}
         {activeTab === "maksut" && (
