@@ -54,7 +54,7 @@ export function ParentShell({ family, onAddMember, onRoleToggle }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <header className="nav" style={{ padding: 'var(--space-3) var(--space-4)', flex: 'none', position: 'relative' }}>
-        <span className="nav-brand" style={{ fontSize: 16 }}>Kotihommat</span>
+        <img src="/kotihommatlogo.png" alt="Kotihommat" style={{ height: 28 }} />
         <button
           type="button"
           className="tag tag-accent"
