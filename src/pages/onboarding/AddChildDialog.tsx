@@ -1,15 +1,15 @@
 interface Props {
-  onAdd: (name: string) => void
+  onAdd: (name: string, pin: string) => void
   onClose: () => void
 }
 
 export function AddChildDialog({ onAdd, onClose }: Props) {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    const name = (
-      e.currentTarget.elements.namedItem('name') as HTMLInputElement
-    ).value.trim()
-    if (name) onAdd(name)
+    const els = e.currentTarget.elements
+    const name = (els.namedItem('name') as HTMLInputElement).value.trim()
+    const pin = (els.namedItem('pin') as HTMLInputElement).value.trim()
+    if (name && /^\d{4}$/.test(pin)) onAdd(name, pin)
   }
 
   return (
@@ -26,6 +26,20 @@ export function AddChildDialog({ onAdd, onClose }: Props) {
               placeholder="esim. Aino"
               required
               autoFocus
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="child-pin">PIN-koodi</label>
+            <input
+              className="input"
+              id="child-pin"
+              name="pin"
+              type="password"
+              inputMode="numeric"
+              maxLength={4}
+              placeholder="1234"
+              pattern="\d{4}"
+              required
             />
           </div>
           <div className="dialog-actions">
