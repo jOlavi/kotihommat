@@ -196,7 +196,6 @@ export function WeekView({ childNames, chores, weeklyPlans, onChildClick }: Prop
                     style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}
                   >
                     <span style={{ flex: 1 }}>{chore.name}</span>
-                    <span style={{ fontSize: 12, opacity: 0.55 }}>{formatPrice(chore.priceCents)} €</span>
                     <span style={{ fontSize: 12, opacity: 0.6 }}>{assignee}</span>
                     <span
                       className={`tag ${past ? 'tag-accent' : 'tag-outline'}`}

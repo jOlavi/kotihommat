@@ -78,10 +78,6 @@ function isToday(date: Date): boolean {
   )
 }
 
-function formatPrice(cents: number): string {
-  return (cents / 100).toLocaleString('fi-FI', { minimumFractionDigits: 2 })
-}
-
 function getAssignee(assignment: WeekAssignment | undefined, chore: Chore, dayKey: DayKey): string {
   if (chore.type === 'paivittainen') return assignment?.days[dayKey] ?? chore.assignedChildNames[0] ?? '–'
   return assignment?.all ?? chore.assignedChildNames[0] ?? '–'
@@ -222,7 +218,6 @@ export function ProfileView({ childNames, initialChild, profiles, updateProfile,
                 {childChores.map(chore => (
                   <div key={chore.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}>
                     <span style={{ flex: 1 }}>{chore.name}</span>
-                    <span style={{ fontSize: 12, opacity: 0.55 }}>{formatPrice(chore.priceCents)} €</span>
                     <span
                       className={`tag ${past ? 'tag-accent' : 'tag-outline'}`}
                       style={{ width: 64, textAlign: 'center', fontSize: 11 }}
