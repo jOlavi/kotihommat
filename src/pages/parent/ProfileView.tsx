@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { AbsenceDialog } from '@/pages/parent/AbsenceDialog'
 import { Chore } from '@/pages/parent/ChoreDialog'
@@ -131,6 +131,12 @@ export function ProfileView({
   const [newPin, setNewPin] = useState('')
   const [pinLoading, setPinLoading] = useState(false)
   const [pinError, setPinError] = useState('')
+
+  useEffect(() => {
+    setPinEditing(false)
+    setNewPin('')
+    setPinError('')
+  }, [selectedName])
 
   const handleAbsenceSave = (type: 'Loma' | 'Sairas', from: string, to: string) => {
     const fmt = (s: string) =>
