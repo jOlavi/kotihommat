@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ListChecks,
   Calendar,
@@ -7,6 +7,8 @@ import {
   Wallet,
   Settings,
 } from "lucide-react";
+import { collection, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { FamilyView } from "@/pages/parent/FamilyView";
 import { ChoresView, WeekAssignment } from "@/pages/parent/ChoresView";
 import { WeekView } from "@/pages/parent/WeekView";
@@ -18,76 +20,51 @@ import {
 import { PayView } from "@/pages/parent/PayView";
 import { Chore } from "@/pages/parent/ChoreDialog";
 
-const INITIAL_CHORES: Chore[] = [
-  {
-    id: "c1",
-    name: "Astianpesukoneen tyhjennys",
-    priceCents: 50,
-    type: "paivittainen",
-    assignedChildNames: [],
-  },
-  {
-    id: "c2",
-    name: "Koiran ulkoilutus",
-    priceCents: 100,
-    type: "paivittainen",
-    assignedChildNames: [],
-  },
-  {
-    id: "c3",
-    name: "Roskat ulos",
-    priceCents: 50,
-    type: "viikoittainen",
-    assignedChildNames: [],
-  },
-];
-
-interface Family {
-  creatorName: string;
-  familyName: string;
-  members: { name: string; role: "parent" | "child" }[];
+interface FirestoreMember {
+  uid: string
+  firstName: string
+  role: 'parent' | 'child'
+  username?: string
+  pin?: string
 }
 
+const INITIAL_CHORES: Chore[] = [
+  { id: "c1", name: "Astianpesukoneen tyhjennys", priceCents: 50, type: "paivittainen", assignedChildNames: [] },
+  { id: "c2", name: "Koiran ulkoilutus", priceCents: 100, type: "paivittainen", assignedChildNames: [] },
+  { id: "c3", name: "Roskat ulos", priceCents: 50, type: "viikoittainen", assignedChildNames: [] },
+];
+
 interface Props {
-  /** Firebase family ID (Task 7 will wire this up fully) */
-  familyId?: string;
-  /** Display name of the signed-in parent */
-  creatorName?: string;
-  /** Called when user signs out (new App.tsx shape) */
-  onSignOut?: () => void;
-  // Legacy props kept for backward compatibility during transition
-  family?: Family;
-  onAddMember?: (member: { name: string; role: "parent" | "child" }) => void;
-  onRoleToggle?: () => void;
+  familyId: string
+  creatorName: string
+  onSignOut: () => void
 }
 
 type Tab = "chores" | "viikko" | "family" | "lapset" | "maksut";
 
-export function ParentShell({
-  familyId: _familyId,
-  creatorName,
-  onSignOut,
-  family,
-  onAddMember,
-  onRoleToggle,
-}: Props) {
-  const resolvedCreatorName = creatorName ?? family?.creatorName ?? 'Vanhempi'
-  const resolvedMembers = family?.members ?? []
-  const resolvedOnRoleToggle = onRoleToggle ?? onSignOut ?? (() => undefined)
-  const resolvedOnAddMember = onAddMember ?? (() => undefined)
+export function ParentShell({ familyId, creatorName, onSignOut }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("chores");
   const [chores, setChores] = useState<Chore[]>(INITIAL_CHORES);
-  const [weeklyPlans, setWeekPlans] = useState<
-    Record<string, WeekAssignment[]>
-  >({});
+  const [weeklyPlans, setWeekPlans] = useState<Record<string, WeekAssignment[]>>({});
   const [profileChildId, setProfileChildId] = useState("");
-  const [profiles, setProfiles] = useState<Record<string, ChildProfile>>(() =>
-    Object.fromEntries(
-      resolvedMembers
-        .filter((m) => m.role === "child")
-        .map((m) => [m.name, makeDefaultProfile()])
-    )
-  );
+  const [profiles, setProfiles] = useState<Record<string, ChildProfile>>({});
+  const [firestoreMembers, setFirestoreMembers] = useState<FirestoreMember[]>([]);
+
+  useEffect(() => {
+    const q = collection(db, `families/${familyId}/members`);
+    return onSnapshot(q, (snap) => {
+      const members = snap.docs.map(d => ({ uid: d.id, ...d.data() } as FirestoreMember));
+      setFirestoreMembers(members);
+      // Initialise profiles for any new child members
+      setProfiles(prev => {
+        const next = { ...prev };
+        members.filter(m => m.role === 'child').forEach(m => {
+          if (!next[m.firstName]) next[m.firstName] = makeDefaultProfile();
+        });
+        return next;
+      });
+    });
+  }, [familyId]);
 
   const updateProfile = (name: string, fn: (p: ChildProfile) => ChildProfile) =>
     setProfiles((prev) => ({
@@ -95,9 +72,9 @@ export function ParentShell({
       [name]: fn(prev[name] ?? makeDefaultProfile()),
     }));
 
-  const childNames = resolvedMembers
-    .filter((m) => m.role === "child")
-    .map((m) => m.name);
+  const childNames = firestoreMembers
+    .filter(m => m.role === 'child')
+    .map(m => m.firstName);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "chores", label: "Kotityöt", icon: <ListChecks size={20} /> },
@@ -127,9 +104,9 @@ export function ParentShell({
             fontWeight: 600,
             fontSize: 15,
           }}
-          onClick={resolvedOnRoleToggle}
+          onClick={onSignOut}
         >
-          {resolvedCreatorName}
+          {creatorName}
         </button>
         <span style={{
           fontFamily: '"Bodoni Moda", var(--font-heading)',
@@ -173,8 +150,8 @@ export function ParentShell({
         )}
         {activeTab === "family" && (
           <FamilyView
-            members={resolvedMembers}
-            onAddChild={(name, _pin) => resolvedOnAddMember({ name, role: "child" })}
+            familyId={familyId}
+            members={firestoreMembers}
           />
         )}
         {activeTab === "lapset" && (

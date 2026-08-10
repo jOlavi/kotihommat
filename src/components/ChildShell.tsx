@@ -7,13 +7,9 @@ import { BalanceView } from '@/pages/child/BalanceView'
 type Tab = 'today' | 'week' | 'balance'
 
 interface Props {
+  familyId: string
   childName: string
-  /** Firebase family ID (wired up in a future task) */
-  familyId?: string
-  /** Called when user signs out (new App.tsx shape) */
-  onSignOut?: () => void
-  /** Legacy toggle callback */
-  onRoleToggle?: () => void
+  onSignOut: () => void
 }
 
 function dateOffset(days: number): string {
@@ -40,8 +36,7 @@ const INITIAL_WEEK_TASKS: Task[] = [
   { id: 'b2', name: 'Koiran ulkoilutus', priceCents: 100, date: dateOffset(3), status: 'tekematon' },
 ]
 
-export function ChildShell({ childName, familyId: _familyId, onSignOut, onRoleToggle }: Props) {
-  const resolvedOnRoleToggle = onRoleToggle ?? onSignOut ?? (() => undefined)
+export function ChildShell({ familyId: _familyId, childName, onSignOut }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('today')
   const [tasks, setTasks] = useState<Task[]>(INITIAL_WEEK_TASKS)
 
@@ -89,7 +84,7 @@ export function ChildShell({ childName, familyId: _familyId, onSignOut, onRoleTo
             fontWeight: 600,
             fontSize: 15,
           }}
-          onClick={resolvedOnRoleToggle}
+          onClick={onSignOut}
         >
           {childName}
         </button>
