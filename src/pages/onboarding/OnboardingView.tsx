@@ -36,12 +36,13 @@ export function OnboardingView({ user: _user, onComplete }: Props) {
     try {
       const result = await createFamilyFn({ firstName, familyName: fName })
       const { familyId: fid, familyCode: code } = result.data
-      // Force-refresh token so new familyId claim is available
-      await auth.currentUser?.getIdToken(true)
+      // Set state first — family was created successfully
       setFamilyId(fid)
       setFamilyCode(code)
       setFamilyName(fName)
       setStep('manage')
+      // Force-refresh token so new familyId claim is available (best-effort)
+      await auth.currentUser?.getIdToken(true).catch(() => undefined)
     } catch {
       setError('Perheen luonti epäonnistui. Tarkista verkkoyhteys.')
     } finally {

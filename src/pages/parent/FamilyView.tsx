@@ -9,7 +9,7 @@ interface Member {
 
 interface Props {
   members: Member[]
-  onAddChild: (name: string) => void
+  onAddChild: (name: string, pin: string) => void
 }
 
 export function FamilyView({ members, onAddChild }: Props) {
@@ -84,7 +84,7 @@ export function FamilyView({ members, onAddChild }: Props) {
 
       {addChildOpen && (
         <AddChildDialog
-          onAdd={name => { onAddChild(name); setAddChildOpen(false) }}
+          onAdd={(name, pin) => { onAddChild(name, pin); setAddChildOpen(false) }}
           onClose={() => setAddChildOpen(false)}
         />
       )}

@@ -39,6 +39,8 @@ export const createFamily = onCall(
       firstName: firstName.trim(), role: 'parent', familyId,
     })
     await adminAuth.setCustomUserClaims(uid, { familyId, role: 'parent' })
+    // Set displayName on the Auth user (best-effort, does not affect family creation)
+    await adminAuth.updateUser(uid, { displayName: firstName.trim() }).catch(() => undefined)
 
     return { familyId, familyCode }
   }
@@ -73,7 +75,7 @@ export const createChildAccount = onCall(
       await db.doc(`families/${familyId}/members/${userRecord.uid}`).set({
         firstName: firstName.trim(), role: 'child', username, pin, familyId,
       })
-    } catch (err) {
+    } catch (_err) {
       await adminAuth.deleteUser(userRecord.uid).catch(() => undefined)
       throw new HttpsError('internal', 'Lapsen tilin luonti epäonnistui')
     }

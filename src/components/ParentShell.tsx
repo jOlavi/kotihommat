@@ -49,14 +49,32 @@ interface Family {
 }
 
 interface Props {
-  family: Family;
-  onAddMember: (member: { name: string; role: "parent" | "child" }) => void;
-  onRoleToggle: () => void;
+  /** Firebase family ID (Task 7 will wire this up fully) */
+  familyId?: string;
+  /** Display name of the signed-in parent */
+  creatorName?: string;
+  /** Called when user signs out (new App.tsx shape) */
+  onSignOut?: () => void;
+  // Legacy props kept for backward compatibility during transition
+  family?: Family;
+  onAddMember?: (member: { name: string; role: "parent" | "child" }) => void;
+  onRoleToggle?: () => void;
 }
 
 type Tab = "chores" | "viikko" | "family" | "lapset" | "maksut";
 
-export function ParentShell({ family, onAddMember, onRoleToggle }: Props) {
+export function ParentShell({
+  familyId: _familyId,
+  creatorName,
+  onSignOut,
+  family,
+  onAddMember,
+  onRoleToggle,
+}: Props) {
+  const resolvedCreatorName = creatorName ?? family?.creatorName ?? 'Vanhempi'
+  const resolvedMembers = family?.members ?? []
+  const resolvedOnRoleToggle = onRoleToggle ?? onSignOut ?? (() => undefined)
+  const resolvedOnAddMember = onAddMember ?? (() => undefined)
   const [activeTab, setActiveTab] = useState<Tab>("chores");
   const [chores, setChores] = useState<Chore[]>(INITIAL_CHORES);
   const [weeklyPlans, setWeekPlans] = useState<
@@ -65,7 +83,7 @@ export function ParentShell({ family, onAddMember, onRoleToggle }: Props) {
   const [profileChildId, setProfileChildId] = useState("");
   const [profiles, setProfiles] = useState<Record<string, ChildProfile>>(() =>
     Object.fromEntries(
-      family.members
+      resolvedMembers
         .filter((m) => m.role === "child")
         .map((m) => [m.name, makeDefaultProfile()])
     )
@@ -77,7 +95,7 @@ export function ParentShell({ family, onAddMember, onRoleToggle }: Props) {
       [name]: fn(prev[name] ?? makeDefaultProfile()),
     }));
 
-  const childNames = family.members
+  const childNames = resolvedMembers
     .filter((m) => m.role === "child")
     .map((m) => m.name);
 
@@ -109,9 +127,9 @@ export function ParentShell({ family, onAddMember, onRoleToggle }: Props) {
             fontWeight: 600,
             fontSize: 15,
           }}
-          onClick={onRoleToggle}
+          onClick={resolvedOnRoleToggle}
         >
-          {family.creatorName}
+          {resolvedCreatorName}
         </button>
         <span style={{
           fontFamily: '"Bodoni Moda", var(--font-heading)',
@@ -155,8 +173,8 @@ export function ParentShell({ family, onAddMember, onRoleToggle }: Props) {
         )}
         {activeTab === "family" && (
           <FamilyView
-            members={family.members}
-            onAddChild={(name) => onAddMember({ name, role: "child" })}
+            members={resolvedMembers}
+            onAddChild={(name, _pin) => resolvedOnAddMember({ name, role: "child" })}
           />
         )}
         {activeTab === "lapset" && (

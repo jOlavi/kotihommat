@@ -38,7 +38,7 @@ export function AddChildDialog({ onAdd, onClose }: Props) {
               inputMode="numeric"
               maxLength={4}
               placeholder="1234"
-              pattern="\d{4}"
+              pattern="[0-9]{4}"
               required
             />
           </div>
