@@ -1,6 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { initializeApp } from 'firebase-admin/app'
-import { getFirestore } from 'firebase-admin/firestore'
+import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { getAuth } from 'firebase-admin/auth'
 
 initializeApp()
@@ -81,4 +81,49 @@ export const createChildAccount = onCall(
   }
 )
 
-// childLogin and updateChildPin added in Tasks 3–4
+export const childLogin = onCall(
+  { region: 'europe-west1' },
+  async (request) => {
+    const { username, pin } = request.data as { username: string; pin: string }
+    const normalizedUsername = username.toLowerCase().trim()
+
+    // Rate limit check
+    const attemptRef = db.doc(`loginAttempts/${normalizedUsername}`)
+    const attemptDoc = await attemptRef.get()
+
+    if (attemptDoc.exists) {
+      const data = attemptDoc.data()!
+      const lockedUntil = data.lockedUntil as Timestamp | undefined
+      if (lockedUntil && lockedUntil.toDate() > new Date()) {
+        return { error: 'locked', lockedUntil: lockedUntil.toDate().toISOString() }
+      }
+    }
+
+    // Find member across all families by username
+    const memberSnap = await db.collectionGroup('members')
+      .where('username', '==', normalizedUsername)
+      .where('role', '==', 'child')
+      .limit(1)
+      .get()
+
+    if (memberSnap.empty || memberSnap.docs[0].data().pin !== pin) {
+      const currentCount = attemptDoc.exists ? ((attemptDoc.data()?.count as number) ?? 0) : 0
+      const newCount = currentCount + 1
+      const update: Record<string, unknown> = { count: newCount }
+      if (!attemptDoc.exists) update.firstAttemptAt = FieldValue.serverTimestamp()
+      if (newCount >= 5) {
+        update.lockedUntil = Timestamp.fromDate(new Date(Date.now() + 15 * 60 * 1000))
+      }
+      await attemptRef.set(update, { merge: true })
+      return { error: 'invalid-credentials' }
+    }
+
+    // Success: reset attempts and return custom token
+    await attemptRef.delete()
+    const uid = memberSnap.docs[0].id
+    const token = await adminAuth.createCustomToken(uid)
+    return { token }
+  }
+)
+
+// updateChildPin added in Task 4
