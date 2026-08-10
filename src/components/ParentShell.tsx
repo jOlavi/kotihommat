@@ -19,14 +19,7 @@ import {
 } from "@/pages/parent/ProfileView";
 import { PayView } from "@/pages/parent/PayView";
 import { Chore } from "@/pages/parent/ChoreDialog";
-
-interface FirestoreMember {
-  uid: string
-  firstName: string
-  role: 'parent' | 'child'
-  username?: string
-  pin?: string
-}
+import { Member } from "@/types"
 
 const INITIAL_CHORES: Chore[] = [
   { id: "c1", name: "Astianpesukoneen tyhjennys", priceCents: 50, type: "paivittainen", assignedChildNames: [] },
@@ -48,12 +41,12 @@ export function ParentShell({ familyId, creatorName, onSignOut }: Props) {
   const [weeklyPlans, setWeekPlans] = useState<Record<string, WeekAssignment[]>>({});
   const [profileChildId, setProfileChildId] = useState("");
   const [profiles, setProfiles] = useState<Record<string, ChildProfile>>({});
-  const [firestoreMembers, setFirestoreMembers] = useState<FirestoreMember[]>([]);
+  const [firestoreMembers, setFirestoreMembers] = useState<Member[]>([]);
 
   useEffect(() => {
     const q = collection(db, `families/${familyId}/members`);
     return onSnapshot(q, (snap) => {
-      const members = snap.docs.map(d => ({ uid: d.id, ...d.data() } as FirestoreMember));
+      const members = snap.docs.map(d => ({ uid: d.id, ...d.data() } as Member));
       setFirestoreMembers(members);
       // Initialise profiles for any new child members
       setProfiles(prev => {

@@ -2,16 +2,11 @@ import { useState } from 'react'
 import { AddChildDialog } from '@/pages/onboarding/AddChildDialog'
 import { InviteParentDialog } from '@/pages/onboarding/InviteParentDialog'
 import { createChildAccountFn } from '@/lib/functions'
-
-interface FirestoreMember {
-  uid: string
-  firstName: string
-  role: 'parent' | 'child'
-}
+import { Member } from '@/types'
 
 interface Props {
   familyId: string
-  members: FirestoreMember[]
+  members: Member[]
 }
 
 export function FamilyView({ familyId, members }: Props) {
