@@ -72,8 +72,7 @@ export function ChildShell({ childName, onRoleToggle }: Props) {
 
   return (
     <div style={{ ...childTheme, display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <header className="nav" style={{ padding: 'var(--space-3) var(--space-4)', flex: 'none' }}>
-        <span className="nav-brand" style={{ fontSize: 16 }}>Kotihommat</span>
+      <header className="nav" style={{ padding: 'var(--space-3) var(--space-4)', flex: 'none', position: 'relative' }}>
         <button
           type="button"
           className="tag tag-accent"
@@ -82,12 +81,20 @@ export function ChildShell({ childName, onRoleToggle }: Props) {
             cursor: 'pointer',
             fontFamily: 'var(--font-heading)',
             fontWeight: 600,
-            marginLeft: 'var(--space-2)',
           }}
           onClick={onRoleToggle}
         >
           {childName}
         </button>
+        <span style={{
+          fontFamily: 'var(--font-heading)',
+          fontWeight: 600,
+          fontSize: 22,
+          color: 'var(--color-accent)',
+          position: 'absolute',
+          left: '50%',
+          transform: 'translateX(-50%)',
+        }}>Kotihommat</span>
         <button
           type="button"
           className="btn btn-ghost btn-icon"
