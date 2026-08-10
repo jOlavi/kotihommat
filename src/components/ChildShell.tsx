@@ -87,7 +87,7 @@ export function ChildShell({ childName, onRoleToggle }: Props) {
           {childName}
         </button>
         <span style={{
-          fontFamily: 'var(--font-heading)',
+          fontFamily: '"Bodoni Moda", var(--font-heading)',
           fontWeight: 600,
           fontSize: 22,
           color: 'var(--color-accent)',
