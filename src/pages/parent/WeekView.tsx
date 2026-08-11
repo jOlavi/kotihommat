@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { collection, onSnapshot } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 import { Chore, Assignment, DayKey, Member } from '@/types'
 
 interface Props {
@@ -105,11 +107,32 @@ function buildChildSummaries(
   })
 }
 
-export function WeekView({ chores, familyId: _familyId, firestoreMembers, onChildClick }: Props) {
+function getWeekId(offset: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + offset * 7)
+  const d2 = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  const dayNum = d2.getUTCDay() || 7
+  d2.setUTCDate(d2.getUTCDate() + 4 - dayNum)
+  const yearStart = new Date(Date.UTC(d2.getUTCFullYear(), 0, 1))
+  const week = Math.ceil((((d2.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+  return `${d.getFullYear()}-W${String(week).padStart(2, '0')}`
+}
+
+export function WeekView({ chores, familyId, firestoreMembers, onChildClick }: Props) {
   const [overviewWeek, setOverviewWeek] = useState(0)
   const [weekAssignments, setWeekAssignments] = useState<Record<string, Assignment>>({})
-  // subscription lisätään Task 2:ssa
-  void setWeekAssignments
+
+  useEffect(() => {
+    const weekId = getWeekId(overviewWeek)
+    return onSnapshot(
+      collection(db, `families/${familyId}/weeklyPlans/${weekId}/assignments`),
+      snap => {
+        const loaded: Record<string, Assignment> = {}
+        snap.docs.forEach(d => { loaded[d.id] = d.data() as Assignment })
+        setWeekAssignments(loaded)
+      }
+    )
+  }, [familyId, overviewWeek])
 
   const weekDates = getWeekDates(overviewWeek)
   const childMembers = firestoreMembers.filter(m => m.role === 'child')
