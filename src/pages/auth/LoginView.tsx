@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword } from 'firebase/auth'
+import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
+import { signInChildAccount } from '@/lib/childAuth'
 
 export function LoginView() {
   const [username, setUsername] = useState('')
@@ -25,11 +26,7 @@ export function LoginView() {
     setError('')
     setLoading(true)
     try {
-      await signInWithEmailAndPassword(
-        auth,
-        `${username.trim().toLowerCase()}@kotihommat.app`,
-        pin
-      )
+      await signInChildAccount(username.trim(), pin)
     } catch {
       setError('Väärä käyttäjätunnus tai PIN')
     } finally {
