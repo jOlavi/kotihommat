@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { Chore, Assignment, DayKey, Member } from '@/types'
+import { Chore, Assignment, DayKey, Member, TaskInstance } from '@/types'
 
 interface Props {
   chores: Chore[]
@@ -81,7 +81,9 @@ function buildChildSummaries(
   childMembers: Member[],
   chores: Chore[],
   weekAssignments: Record<string, Assignment>,
-  weekDates: Date[]
+  weekDates: Date[],
+  taskInstances: TaskInstance[],
+  weekId: string,
 ): ChildSummary[] {
   return childMembers.map(member => {
     let doneCount = 0
@@ -94,12 +96,19 @@ function buildChildSummaries(
         DAY_KEYS.forEach((dayKey, i) => {
           if (getAssigneeUid(assignment, chore, dayKey) !== member.uid) return
           totalCount++
-          if (isPast(weekDates[i])) { doneCount++; earnedCents += chore.priceCents }
+          const iso = weekDates[i].toISOString().slice(0, 10)
+          const inst = taskInstances.find(t => t.choreId === chore.id && t.memberId === member.uid && t.date === iso)
+          if (inst?.status === 'tehty' || inst?.status === 'merkitty') {
+            doneCount++; earnedCents += chore.priceCents
+          }
         })
       } else {
         if (assignment?.all !== member.uid) return
         totalCount++
-        if (weekDates.some(d => isPast(d))) { doneCount++; earnedCents += chore.priceCents }
+        const inst = taskInstances.find(t => t.choreId === chore.id && t.memberId === member.uid && t.isoWeek === weekId)
+        if (inst?.status === 'tehty' || inst?.status === 'merkitty') {
+          doneCount++; earnedCents += chore.priceCents
+        }
       }
     })
 
@@ -121,6 +130,7 @@ function getWeekId(offset: number): string {
 export function WeekView({ chores, familyId, firestoreMembers, onChildClick }: Props) {
   const [overviewWeek, setOverviewWeek] = useState(0)
   const [weekAssignments, setWeekAssignments] = useState<Record<string, Assignment>>({})
+  const [taskInstances, setTaskInstances] = useState<TaskInstance[]>([])
 
   useEffect(() => {
     const weekId = getWeekId(overviewWeek)
@@ -134,10 +144,19 @@ export function WeekView({ chores, familyId, firestoreMembers, onChildClick }: P
     )
   }, [familyId, overviewWeek])
 
+  useEffect(() => {
+    return onSnapshot(
+      collection(db, `families/${familyId}/taskInstances`),
+      snap => setTaskInstances(snap.docs.map(d => ({ id: d.id, ...d.data() } as TaskInstance)))
+    )
+  }, [familyId])
+
+  const weekId = getWeekId(overviewWeek)
   const weekDates = getWeekDates(overviewWeek)
   const childMembers = firestoreMembers.filter(m => m.role === 'child')
   const plannableChores = chores.filter(c => c.type !== 'once')
-  const childSummaries = buildChildSummaries(childMembers, chores, weekAssignments, weekDates)
+  const weekTaskInstances = taskInstances.filter(t => t.isoWeek === weekId)
+  const childSummaries = buildChildSummaries(childMembers, chores, weekAssignments, weekDates, weekTaskInstances, weekId)
 
   return (
     <div style={{ padding: 'var(--space-4)' }}>
@@ -190,20 +209,21 @@ export function WeekView({ chores, familyId, firestoreMembers, onChildClick }: P
                 <p style={{ fontSize: 12, opacity: 0.4, margin: 0 }}>Ei kotitöitä.</p>
               ) : plannableChores.map(chore => {
                 const assigneeUid = getAssigneeUid(weekAssignments[chore.id], chore, dayKey)
+                if (!assigneeUid) return null
                 const assigneeName = firestoreMembers.find(m => m.uid === assigneeUid)?.firstName ?? '–'
+                const iso = date.toISOString().slice(0, 10)
+                const inst = weekTaskInstances.find(t => t.choreId === chore.id && t.memberId === assigneeUid && t.date === iso)
+                const done = inst?.status === 'tehty' || inst?.status === 'merkitty'
 
                 return (
-                  <div
-                    key={chore.id}
-                    style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}
-                  >
+                  <div key={chore.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}>
                     <span style={{ flex: 1 }}>{chore.name}</span>
                     <span style={{ fontSize: 12, opacity: 0.6 }}>{assigneeName}</span>
                     <span
-                      className={`tag ${past ? 'tag-accent' : 'tag-outline'}`}
+                      className={`tag ${done ? 'tag-accent' : past ? 'tag-outline' : 'tag-neutral'}`}
                       style={{ width: 64, textAlign: 'center', fontSize: 11 }}
                     >
-                      {past ? 'Tehty' : 'Kesken'}
+                      {done ? 'Tehty' : past ? 'Tekemättä' : 'Kesken'}
                     </span>
                   </div>
                 )
