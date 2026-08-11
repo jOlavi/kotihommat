@@ -295,7 +295,7 @@ export function ProfileView({ initialChild, chores, familyId, firestoreMembers }
                     <div key={chore.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}>
                       <span style={{ flex: 1 }}>{chore.name}</span>
                       <span style={{ fontSize: 12, opacity: 0.55 }}>{formatPrice(chore.priceCents)} €</span>
-                      <span className={`tag ${done ? 'tag-accent' : isPast(date) ? 'tag-outline' : 'tag-neutral'}`}
+                      <span className={`tag ${done ? 'tag-accent' : 'tag-outline'}`}
                         style={{ width: 64, textAlign: 'center', fontSize: 11 }}>
                         {done ? 'Tehty' : isPast(date) ? 'Tekemättä' : 'Kesken'}
                       </span>
