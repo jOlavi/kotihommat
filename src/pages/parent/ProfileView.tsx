@@ -296,7 +296,7 @@ export function ProfileView({ initialChild, chores, familyId, firestoreMembers }
                       <span style={{ flex: 1 }}>{chore.name}</span>
                       <span style={{ fontSize: 12, opacity: 0.55 }}>{formatPrice(chore.priceCents)} €</span>
                       <span className={`tag ${done ? 'tag-accent' : 'tag-outline'}`}
-                        style={{ width: 64, textAlign: 'center', fontSize: 11 }}>
+                        style={{ width: 64, fontSize: 11, display: 'flex', justifyContent: 'center' }}>
                         {done ? 'Tehty' : 'Kesken'}
                       </span>
                     </div>

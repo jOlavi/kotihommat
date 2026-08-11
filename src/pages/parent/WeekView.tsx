@@ -221,7 +221,7 @@ export function WeekView({ chores, familyId, firestoreMembers, onChildClick }: P
                     <span style={{ fontSize: 12, opacity: 0.6 }}>{assigneeName}</span>
                     <span
                       className={`tag ${done ? 'tag-accent' : 'tag-outline'}`}
-                      style={{ width: 64, textAlign: 'center', fontSize: 11 }}
+                      style={{ width: 64, fontSize: 11, display: 'flex', justifyContent: 'center' }}
                     >
                       {done ? 'Tehty' : 'Kesken'}
                     </span>
