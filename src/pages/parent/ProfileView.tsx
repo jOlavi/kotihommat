@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { collection, onSnapshot } from 'firebase/firestore'
+import { collection, doc, onSnapshot, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { updateChildAuthPin } from '@/lib/childAuth'
 import { AbsenceDialog } from '@/pages/parent/AbsenceDialog'
 import { Chore, Assignment, DayKey, Member } from '@/types'
-import { updateChildPinFn } from '@/lib/functions'
 
 export type DayStatus = 'full' | 'partial' | 'future' | 'poissa'
 
@@ -199,10 +199,12 @@ export function ProfileView({
 
         const handleSavePin = async () => {
           if (!/^\d{4}$/.test(newPin)) { setPinError('PIN tulee olla 4 numeroa'); return }
+          if (!member.username || !member.pin) { setPinError('Käyttäjätiedot puuttuvat'); return }
           setPinLoading(true)
           setPinError('')
           try {
-            await updateChildPinFn({ childUid: member.uid, newPin, familyId })
+            await updateChildAuthPin(member.username, member.pin, newPin)
+            await updateDoc(doc(db, `families/${familyId}/members/${member.uid}`), { pin: newPin })
             setPinEditing(false)
             setNewPin('')
           } catch {

@@ -3,36 +3,39 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper: check if the caller is a member of a family
     function isMember(familyId) {
       return request.auth != null &&
         exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
     }
 
-    // Helper: check if the caller is a parent in a family
     function isParent(familyId) {
       return request.auth != null &&
         get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role == 'parent';
     }
 
-    // Family document: readable by members, writable by parent
-    match /families/{familyId} {
-      allow read: if isMember(familyId);
-      allow write: if isParent(familyId);
+    // User-family mapping: korvaa custom claims
+    match /userFamilies/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null;
+      allow update, delete: if false;
+    }
 
-      // Members: parent can read/write all; child can only read own doc
+    match /families/{familyId} {
+      allow create: if request.auth != null;
+      allow read: if isMember(familyId);
+      allow update, delete: if isParent(familyId);
+
       match /members/{uid} {
         allow read: if isParent(familyId) || (request.auth != null && request.auth.uid == uid);
-        allow write: if isParent(familyId);
+        allow create: if request.auth != null && (request.auth.uid == uid || isParent(familyId));
+        allow update, delete: if isParent(familyId);
       }
 
-      // Chores: parent full access; child read-only
       match /chores/{choreId} {
         allow read: if isMember(familyId);
         allow write: if isParent(familyId);
       }
 
-      // Weekly plans: parent full access; child read-only
       match /weeklyPlans/{weekId} {
         allow read: if isMember(familyId);
         allow write: if isParent(familyId);
@@ -43,7 +46,6 @@ service cloud.firestore {
         }
       }
 
-      // Task instances: members can read; child can only update own status field
       match /taskInstances/{instanceId} {
         allow read: if isMember(familyId);
         allow create: if isParent(familyId);
@@ -54,21 +56,17 @@ service cloud.firestore {
         allow delete: if isParent(familyId);
       }
 
-      // Absences: parent full access; child read-only
       match /members/{uid}/absences/{absenceId} {
         allow read: if isMember(familyId);
         allow write: if isParent(familyId);
       }
 
-      // Payments: parent full access; child read own
       match /members/{uid}/payments/{paymentId} {
         allow read: if isParent(familyId) || (request.auth != null && request.auth.uid == uid);
         allow write: if isParent(familyId);
       }
     }
 
-    // loginAttempts: Cloud Functions only (Admin SDK bypasses all rules)
-    // No client access needed
     match /loginAttempts/{username} {
       allow read, write: if false;
     }

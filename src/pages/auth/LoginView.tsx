@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { signInWithPopup, GoogleAuthProvider, signInWithCustomToken } from 'firebase/auth'
+import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
-import { childLoginFn } from '@/lib/functions'
 
 export function LoginView() {
   const [username, setUsername] = useState('')
@@ -26,20 +25,13 @@ export function LoginView() {
     setError('')
     setLoading(true)
     try {
-      const result = await childLoginFn({ username: username.trim(), pin })
-      const data = result.data
-      if (data.error === 'locked') {
-        const until = data.lockedUntil
-          ? new Date(data.lockedUntil).toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' })
-          : ''
-        setError(`Tili lukittu 15 minuutiksi${until ? ` — avautuu ${until}` : ''}`)
-      } else if (data.error === 'invalid-credentials') {
-        setError('Väärä käyttäjätunnus tai PIN')
-      } else if (data.token) {
-        await signInWithCustomToken(auth, data.token)
-      }
+      await signInWithEmailAndPassword(
+        auth,
+        `${username.trim().toLowerCase()}@kotihommat.app`,
+        pin
+      )
     } catch {
-      setError('Kirjautuminen epäonnistui')
+      setError('Väärä käyttäjätunnus tai PIN')
     } finally {
       setLoading(false)
     }
@@ -86,7 +78,7 @@ export function LoginView() {
           <input
             className="input"
             id="login-username"
-            placeholder="esim. aino.ABC123"
+            placeholder="esim. aino.abc123"
             value={username}
             onChange={e => setUsername(e.target.value)}
             autoComplete="username"

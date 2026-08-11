@@ -1,12 +1,20 @@
 import { useState } from 'react'
+import { doc, setDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { createChildAuthAccount } from '@/lib/childAuth'
 import { AddChildDialog } from '@/pages/onboarding/AddChildDialog'
 import { InviteParentDialog } from '@/pages/onboarding/InviteParentDialog'
-import { createChildAccountFn } from '@/lib/functions'
 import { Member } from '@/types'
 
 interface Props {
   familyId: string
   members: Member[]
+}
+
+function generateUsername(firstName: string): string {
+  const name = firstName.toLowerCase().replace(/\s+/g, '')
+  const code = Math.random().toString(36).slice(2, 8)
+  return `${name}.${code}`
 }
 
 export function FamilyView({ familyId, members }: Props) {
@@ -19,7 +27,17 @@ export function FamilyView({ familyId, members }: Props) {
     setLoading(true)
     setError('')
     try {
-      await createChildAccountFn({ firstName, pin, familyId })
+      const username = generateUsername(firstName)
+      const uid = await createChildAuthAccount(username, pin, firstName)
+      await setDoc(doc(db, `families/${familyId}/members/${uid}`), {
+        role: 'child',
+        firstName,
+        familyId,
+        username,
+        pin,
+        paidTotal: 0,
+      })
+      await setDoc(doc(db, `userFamilies/${uid}`), { familyId, role: 'child' })
       setAddChildOpen(false)
     } catch {
       setError('Lapsen lisäys epäonnistui.')
@@ -57,7 +75,7 @@ export function FamilyView({ familyId, members }: Props) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
         <button type="button" className="btn btn-primary btn-block"
           onClick={() => setAddChildOpen(true)} disabled={loading}>
-          Lisää lapsi
+          {loading ? 'Lisätään…' : 'Lisää lapsi'}
         </button>
         <button type="button" className="btn btn-secondary btn-block"
           onClick={() => setInviteOpen(true)} disabled={loading}>

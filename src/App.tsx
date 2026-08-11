@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { onAuthStateChanged, signOut, User } from 'firebase/auth'
-import { auth } from '@/lib/firebase'
+import { doc, getDoc } from 'firebase/firestore'
+import { auth, db } from '@/lib/firebase'
 import { LoginView } from '@/pages/auth/LoginView'
 import { OnboardingView } from '@/pages/onboarding/OnboardingView'
 import { ChildShell } from '@/components/ChildShell'
@@ -27,20 +28,21 @@ export default function App() {
         setAuthState({ status: 'unauthenticated', user: null, familyId: null })
         return
       }
-      const token = await user.getIdTokenResult()
-      const familyId = token.claims.familyId as string | undefined
-      const role = token.claims.role as string | undefined
-
-      if (!familyId || !role) {
+      try {
+        const snap = await getDoc(doc(db, `userFamilies/${user.uid}`))
+        if (!snap.exists()) {
+          setAuthState({ status: 'onboarding', user, familyId: null })
+          return
+        }
+        const { familyId, role } = snap.data() as { familyId: string; role: string }
+        setAuthState({
+          status: role === 'parent' ? 'parent' : 'child',
+          user,
+          familyId,
+        })
+      } catch {
         setAuthState({ status: 'onboarding', user, familyId: null })
-        return
       }
-
-      setAuthState({
-        status: role === 'parent' ? 'parent' : 'child',
-        user,
-        familyId,
-      })
     })
   }, [])
 

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { User } from 'firebase/auth'
-import { auth } from '@/lib/firebase'
-import { createFamilyFn, createChildAccountFn } from '@/lib/functions'
+import { collection, doc, setDoc } from 'firebase/firestore'
+import { auth, db } from '@/lib/firebase'
+import { createChildAuthAccount } from '@/lib/childAuth'
 import { AddChildDialog } from './AddChildDialog'
 
 type Step = 'create' | 'manage'
@@ -14,6 +15,12 @@ interface ChildEntry {
 interface Props {
   user: User
   onComplete: (familyId: string) => void
+}
+
+function generateUsername(firstName: string): string {
+  const name = firstName.toLowerCase().replace(/\s+/g, '')
+  const code = Math.random().toString(36).slice(2, 8)
+  return `${name}.${code}`
 }
 
 export function OnboardingView({ user: _user, onComplete }: Props) {
@@ -34,15 +41,24 @@ export function OnboardingView({ user: _user, onComplete }: Props) {
     setLoading(true)
     setError('')
     try {
-      const result = await createFamilyFn({ firstName, familyName: fName })
-      const { familyId: fid, familyCode: code } = result.data
-      // Set state first — family was created successfully
+      const parentUid = auth.currentUser!.uid
+      const familyRef = doc(collection(db, 'families'))
+      const fid = familyRef.id
+      const code = Math.random().toString(36).slice(2, 8).toUpperCase()
+
+      await setDoc(familyRef, { name: fName, familyCode: code, createdAt: new Date() })
+      await setDoc(doc(db, `families/${fid}/members/${parentUid}`), {
+        role: 'parent',
+        firstName,
+        familyId: fid,
+        paidTotal: 0,
+      })
+      await setDoc(doc(db, `userFamilies/${parentUid}`), { familyId: fid, role: 'parent' })
+
       setFamilyId(fid)
       setFamilyCode(code)
       setFamilyName(fName)
       setStep('manage')
-      // Force-refresh token so new familyId claim is available (best-effort)
-      await auth.currentUser?.getIdToken(true).catch(() => undefined)
     } catch {
       setError('Perheen luonti epäonnistui. Tarkista verkkoyhteys.')
     } finally {
@@ -54,8 +70,18 @@ export function OnboardingView({ user: _user, onComplete }: Props) {
     setLoading(true)
     setError('')
     try {
-      const result = await createChildAccountFn({ firstName, pin, familyId })
-      setChildren(prev => [...prev, { firstName, username: result.data.username }])
+      const username = generateUsername(firstName)
+      const uid = await createChildAuthAccount(username, pin, firstName)
+      await setDoc(doc(db, `families/${familyId}/members/${uid}`), {
+        role: 'child',
+        firstName,
+        familyId,
+        username,
+        pin,
+        paidTotal: 0,
+      })
+      await setDoc(doc(db, `userFamilies/${uid}`), { familyId, role: 'child' })
+      setChildren(prev => [...prev, { firstName, username }])
       setDialogOpen(false)
     } catch {
       setError('Lapsen lisäys epäonnistui.')
@@ -139,7 +165,7 @@ export function OnboardingView({ user: _user, onComplete }: Props) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginTop: 'auto' }}>
             <button type="button" className="btn btn-secondary btn-block"
               onClick={() => setDialogOpen(true)} disabled={loading}>
-              Lisää lapsi
+              {loading ? 'Lisätään…' : 'Lisää lapsi'}
             </button>
             <button type="button" className="btn btn-primary btn-block"
               onClick={() => onComplete(familyId)} disabled={loading}>
