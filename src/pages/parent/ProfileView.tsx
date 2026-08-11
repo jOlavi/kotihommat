@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { collection, onSnapshot } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 import { AbsenceDialog } from '@/pages/parent/AbsenceDialog'
 import { Chore, Assignment, DayKey, Member } from '@/types'
 import { updateChildPinFn } from '@/lib/functions'
@@ -119,8 +121,25 @@ export function ProfileView({
   const [pinLoading, setPinLoading] = useState(false)
   const [pinError, setPinError] = useState('')
   const [weekAssignments, setWeekAssignments] = useState<Record<string, Assignment>>({})
-  // subscription lisätään Task 3:ssa
-  void setWeekAssignments
+
+  useEffect(() => {
+    const ref = new Date()
+    ref.setDate(ref.getDate() + weekOffset * 7)
+    const d2 = new Date(Date.UTC(ref.getFullYear(), ref.getMonth(), ref.getDate()))
+    const dayNum = d2.getUTCDay() || 7
+    d2.setUTCDate(d2.getUTCDate() + 4 - dayNum)
+    const yearStart = new Date(Date.UTC(d2.getUTCFullYear(), 0, 1))
+    const week = Math.ceil((((d2.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+    const weekId = `${ref.getFullYear()}-W${String(week).padStart(2, '0')}`
+    return onSnapshot(
+      collection(db, `families/${familyId}/weeklyPlans/${weekId}/assignments`),
+      snap => {
+        const loaded: Record<string, Assignment> = {}
+        snap.docs.forEach(d => { loaded[d.id] = d.data() as Assignment })
+        setWeekAssignments(loaded)
+      }
+    )
+  }, [familyId, weekOffset])
 
   useEffect(() => {
     setPinEditing(false)
