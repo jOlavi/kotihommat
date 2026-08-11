@@ -33,10 +33,14 @@ function toISODate(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
 
+function formatPrice(cents: number): string {
+  return (cents / 100).toLocaleString('fi-FI', { minimumFractionDigits: 2 })
+}
+
 const STATUS_TAG: Record<TaskStatus, { className: string; label: string }> = {
-  tehty:     { className: 'tag tag-accent',   label: 'Tehty' },
-  tekematon: { className: 'tag tag-outline',  label: 'Tekemättä' },
-  merkitty:  { className: 'tag tag-neutral',  label: 'Maksettu' },
+  tehty:     { className: 'tag tag-accent',  label: 'Tehty' },
+  tekematon: { className: 'tag tag-outline', label: 'Kesken' },
+  merkitty:  { className: 'tag tag-neutral', label: 'Maksettu' },
 }
 
 export function WeekView({ tasks, today }: Props) {
@@ -44,9 +48,18 @@ export function WeekView({ tasks, today }: Props) {
   const weekNumber = getISOWeek(now)
   const weekDays = getWeekDays(now)
 
+  const weekEarned = tasks
+    .filter(t => t.status === 'tehty' || t.status === 'merkitty')
+    .reduce((sum, t) => sum + t.priceCents, 0)
+
   return (
     <div style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-      <h2 style={{ margin: 0 }}>Viikko {weekNumber}</h2>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <h2 style={{ margin: 0 }}>Viikko {weekNumber}</h2>
+        <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 16, color: 'var(--color-accent-700)' }}>
+          {formatPrice(weekEarned)} €
+        </span>
+      </div>
 
       {weekDays.map((day, i) => {
         const iso = toISODate(day)
@@ -72,7 +85,10 @@ export function WeekView({ tasks, today }: Props) {
                   return (
                     <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-1) 0' }}>
                       <span style={{ flex: 1, fontSize: 15 }}>{task.choreName}</span>
-                      <span className={className}>{label}</span>
+                      <span style={{ fontSize: 13, opacity: 0.6 }}>{formatPrice(task.priceCents)} €</span>
+                      <span className={className} style={{ display: 'flex', justifyContent: 'center', width: 64, fontSize: 11 }}>
+                        {label}
+                      </span>
                     </div>
                   )
                 })}

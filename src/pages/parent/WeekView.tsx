@@ -43,14 +43,6 @@ function getWeekDates(offset: number): Date[] {
   })
 }
 
-function isPast(date: Date): boolean {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const d = new Date(date)
-  d.setHours(0, 0, 0, 0)
-  return d < today
-}
-
 function isToday(date: Date): boolean {
   const today = new Date()
   return (
@@ -188,7 +180,6 @@ export function WeekView({ chores, familyId, firestoreMembers, onChildClick }: P
 
       {DAY_KEYS.map((dayKey, i) => {
         const date = weekDates[i]
-        const past = isPast(date)
         const today = isToday(date)
 
         return (
