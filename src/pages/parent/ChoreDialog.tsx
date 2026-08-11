@@ -1,45 +1,36 @@
-export type ChoreType = 'paivittainen' | 'viikoittainen' | 'kertaluontoinen'
-
-export interface Chore {
-  id: string
-  name: string
-  priceCents: number
-  type: ChoreType
-  assignedChildNames: string[]
-}
+import { Chore, ChoreType, Member } from '@/types'
 
 export interface ChoreFormData {
   name: string
   priceCents: number
   type: ChoreType
-  assignedChildNames: string[]
+  assignedMemberIds: string[]
 }
 
 const TYPE_LABELS: Record<ChoreType, string> = {
-  paivittainen: 'Päivittäin',
-  viikoittainen: 'Viikoittain',
-  kertaluontoinen: 'Kerran',
+  daily: 'Päivittäin',
+  weekly: 'Viikoittain',
+  once: 'Kerran',
 }
 
 interface Props {
   chore: Chore | null
-  childNames: string[]
+  firestoreMembers: Member[]
   onSave: (data: ChoreFormData) => void
   onClose: () => void
 }
 
-export function ChoreDialog({ chore, childNames, onSave, onClose }: Props) {
+export function ChoreDialog({ chore, firestoreMembers, onSave, onClose }: Props) {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const form = e.currentTarget
     const name = (form.elements.namedItem('name') as HTMLInputElement).value.trim()
     const price = parseFloat((form.elements.namedItem('price') as HTMLInputElement).value)
     const type = (form.elements.namedItem('type') as RadioNodeList).value as ChoreType
-    const assignBoxes = Array.from(
-      form.querySelectorAll('input[name="assign"]:checked')
-    ) as HTMLInputElement[]
-    const assignedChildNames = assignBoxes.map(el => el.value)
-    onSave({ name, priceCents: Math.round(price * 100), type, assignedChildNames })
+    const assignedMemberIds = Array.from(
+      form.querySelectorAll<HTMLInputElement>('input[name="assign"]:checked')
+    ).map(el => el.value)
+    onSave({ name, priceCents: Math.round(price * 100), type, assignedMemberIds })
   }
 
   return (
@@ -78,13 +69,13 @@ export function ChoreDialog({ chore, childNames, onSave, onClose }: Props) {
         <div className="field">
           <label>Tyyppi</label>
           <div className="seg" style={{ width: '100%' }}>
-            {(['paivittainen', 'viikoittainen', 'kertaluontoinen'] as ChoreType[]).map(t => (
+            {(['daily', 'weekly', 'once'] as ChoreType[]).map(t => (
               <label key={t} className="seg-opt" style={{ flex: 1, justifyContent: 'center' }}>
                 <input
                   type="radio"
                   name="type"
                   value={t}
-                  defaultChecked={(chore?.type ?? 'paivittainen') === t}
+                  defaultChecked={(chore?.type ?? 'daily') === t}
                 />
                 {TYPE_LABELS[t]}
               </label>
@@ -92,20 +83,20 @@ export function ChoreDialog({ chore, childNames, onSave, onClose }: Props) {
           </div>
         </div>
 
-        {childNames.length > 0 && (
+        {firestoreMembers.length > 0 && (
           <div className="field">
             <label>Kohdista lapselle</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
-              {childNames.map(n => (
-                <label key={n} className="radio">
+              {firestoreMembers.map(m => (
+                <label key={m.uid} className="radio">
                   <input
                     type="checkbox"
                     name="assign"
-                    value={n}
-                    defaultChecked={chore?.assignedChildNames.includes(n) ?? false}
+                    value={m.uid}
+                    defaultChecked={chore?.assignedMemberIds.includes(m.uid) ?? false}
                   />
                   <span className="dot" />
-                  {n}
+                  {m.firstName}
                 </label>
               ))}
             </div>

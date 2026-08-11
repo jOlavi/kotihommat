@@ -10,7 +10,7 @@ import {
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { FamilyView } from "@/pages/parent/FamilyView";
-import { ChoresView, WeekAssignment } from "@/pages/parent/ChoresView";
+import { ChoresView } from "@/pages/parent/ChoresView";
 import { WeekView } from "@/pages/parent/WeekView";
 import {
   ProfileView,
@@ -18,14 +18,7 @@ import {
   makeDefaultProfile,
 } from "@/pages/parent/ProfileView";
 import { PayView } from "@/pages/parent/PayView";
-import { Chore } from "@/pages/parent/ChoreDialog";
-import { Member } from "@/types"
-
-const INITIAL_CHORES: Chore[] = [
-  { id: "c1", name: "Astianpesukoneen tyhjennys", priceCents: 50, type: "paivittainen", assignedChildNames: [] },
-  { id: "c2", name: "Koiran ulkoilutus", priceCents: 100, type: "paivittainen", assignedChildNames: [] },
-  { id: "c3", name: "Roskat ulos", priceCents: 50, type: "viikoittainen", assignedChildNames: [] },
-];
+import { Chore, Member } from "@/types"
 
 interface Props {
   familyId: string
@@ -37,18 +30,21 @@ type Tab = "chores" | "viikko" | "family" | "lapset" | "maksut";
 
 export function ParentShell({ familyId, creatorName, onSignOut }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("chores");
-  const [chores, setChores] = useState<Chore[]>(INITIAL_CHORES);
-  const [weeklyPlans, setWeekPlans] = useState<Record<string, WeekAssignment[]>>({});
+  const [chores, setChores] = useState<Chore[]>([]);
   const [profileChildId, setProfileChildId] = useState("");
   const [profiles, setProfiles] = useState<Record<string, ChildProfile>>({});
   const [firestoreMembers, setFirestoreMembers] = useState<Member[]>([]);
 
   useEffect(() => {
-    const q = collection(db, `families/${familyId}/members`);
-    return onSnapshot(q, (snap) => {
+    return onSnapshot(collection(db, `families/${familyId}/chores`), snap => {
+      setChores(snap.docs.map(d => ({ id: d.id, ...d.data() } as Chore)))
+    })
+  }, [familyId])
+
+  useEffect(() => {
+    return onSnapshot(collection(db, `families/${familyId}/members`), (snap) => {
       const members = snap.docs.map(d => ({ uid: d.id, ...d.data() } as Member));
       setFirestoreMembers(members);
-      // Initialise profiles for any new child members
       setProfiles(prev => {
         const next = { ...prev };
         members.filter(m => m.role === 'child').forEach(m => {
@@ -123,20 +119,17 @@ export function ParentShell({ familyId, creatorName, onSignOut }: Props) {
       <main style={{ flex: 1, overflowY: "auto" }}>
         {activeTab === "chores" && (
           <ChoresView
-            childNames={childNames}
-            chores={chores}
-            setChores={setChores}
-            weeklyPlans={weeklyPlans}
-            setWeekPlans={setWeekPlans}
+            familyId={familyId}
+            firestoreMembers={firestoreMembers}
           />
         )}
         {activeTab === "viikko" && (
           <WeekView
-            childNames={childNames}
             chores={chores}
-            weeklyPlans={weeklyPlans}
-            onChildClick={(name) => {
-              setProfileChildId(name);
+            familyId={familyId}
+            firestoreMembers={firestoreMembers}
+            onChildClick={(uid) => {
+              setProfileChildId(uid);
               setActiveTab("lapset");
             }}
           />
@@ -149,12 +142,10 @@ export function ParentShell({ familyId, creatorName, onSignOut }: Props) {
         )}
         {activeTab === "lapset" && (
           <ProfileView
-            childNames={childNames}
             initialChild={profileChildId}
             profiles={profiles}
             updateProfile={updateProfile}
             chores={chores}
-            weeklyPlans={weeklyPlans}
             familyId={familyId}
             firestoreMembers={firestoreMembers}
           />

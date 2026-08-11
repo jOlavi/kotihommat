@@ -1,13 +1,12 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { Chore } from '@/pages/parent/ChoreDialog'
-import { DayKey, WeekAssignment } from '@/pages/parent/ChoresView'
+import { Chore, Assignment, DayKey, Member } from '@/types'
 
 interface Props {
-  childNames: string[]
   chores: Chore[]
-  weeklyPlans: Record<string, WeekAssignment[]>
-  onChildClick: (name: string) => void
+  familyId: string
+  firestoreMembers: Member[]
+  onChildClick: (uid: string) => void
 }
 
 const DAY_KEYS: DayKey[] = ['ma', 'ti', 'ke', 'to', 'pe', 'la', 'su']
@@ -28,11 +27,6 @@ function getISOWeek(date: Date): number {
   d.setUTCDate(d.getUTCDate() + 4 - dayNum)
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
   return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
-}
-
-function getWeekId(offset: number): string {
-  const d = getWeekDate(offset)
-  return `${d.getFullYear()}-W${String(getISOWeek(d)).padStart(2, '0')}`
 }
 
 function getWeekDates(offset: number): Date[] {
@@ -68,77 +62,63 @@ function formatPrice(cents: number): string {
   return (cents / 100).toLocaleString('fi-FI', { minimumFractionDigits: 2 })
 }
 
-function getAssignee(
-  assignment: WeekAssignment | undefined,
-  chore: Chore,
-  dayKey: DayKey
-): string {
-  if (chore.type === 'paivittainen') {
-    return assignment?.days[dayKey] || chore.assignedChildNames[0] || '–'
-  }
-  return assignment?.all || chore.assignedChildNames[0] || '–'
+function getAssigneeUid(assignment: Assignment | undefined, chore: Chore, dayKey: DayKey): string {
+  if (chore.type === 'daily') return assignment?.[dayKey] ?? ''
+  return assignment?.all ?? ''
 }
 
 interface ChildSummary {
-  name: string
+  uid: string
+  firstName: string
   doneCount: number
   totalCount: number
   earnedCents: number
 }
 
 function buildChildSummaries(
-  childNames: string[],
+  childMembers: Member[],
   chores: Chore[],
-  weeklyPlan: WeekAssignment[],
+  weekAssignments: Record<string, Assignment>,
   weekDates: Date[]
 ): ChildSummary[] {
-  return childNames.map(name => {
+  return childMembers.map(member => {
     let doneCount = 0
     let totalCount = 0
     let earnedCents = 0
 
-    chores.filter(c => c.type !== 'kertaluontoinen').forEach(chore => {
-      const assignment = weeklyPlan.find(a => a.choreId === chore.id)
-
-      if (chore.type === 'paivittainen') {
+    chores.filter(c => c.type !== 'once').forEach(chore => {
+      const assignment = weekAssignments[chore.id]
+      if (chore.type === 'daily') {
         DAY_KEYS.forEach((dayKey, i) => {
-          const assignee = getAssignee(assignment, chore, dayKey)
-          if (assignee !== name) return
+          if (getAssigneeUid(assignment, chore, dayKey) !== member.uid) return
           totalCount++
-          if (isPast(weekDates[i])) {
-            doneCount++
-            earnedCents += chore.priceCents
-          }
+          if (isPast(weekDates[i])) { doneCount++; earnedCents += chore.priceCents }
         })
       } else {
-        // viikoittainen: lasketaan kerran
-        const assignee = assignment?.all || chore.assignedChildNames[0] || '–'
-        if (assignee !== name) return
+        if (assignment?.all !== member.uid) return
         totalCount++
-        if (weekDates.some(d => isPast(d))) {
-          doneCount++
-          earnedCents += chore.priceCents
-        }
+        if (weekDates.some(d => isPast(d))) { doneCount++; earnedCents += chore.priceCents }
       }
     })
 
-    return { name, doneCount, totalCount, earnedCents }
+    return { uid: member.uid, firstName: member.firstName, doneCount, totalCount, earnedCents }
   })
 }
 
-export function WeekView({ childNames, chores, weeklyPlans, onChildClick }: Props) {
+export function WeekView({ chores, familyId: _familyId, firestoreMembers, onChildClick }: Props) {
   const [overviewWeek, setOverviewWeek] = useState(0)
+  const [weekAssignments, setWeekAssignments] = useState<Record<string, Assignment>>({})
+  // subscription lisätään Task 2:ssa
+  void setWeekAssignments
 
   const weekDates = getWeekDates(overviewWeek)
-  const weekId = getWeekId(overviewWeek)
-  const weeklyPlan = weeklyPlans[weekId] ?? []
-  const plannableChores = chores.filter(c => c.type !== 'kertaluontoinen')
-  const childSummaries = buildChildSummaries(childNames, chores, weeklyPlan, weekDates)
+  const childMembers = firestoreMembers.filter(m => m.role === 'child')
+  const plannableChores = chores.filter(c => c.type !== 'once')
+  const childSummaries = buildChildSummaries(childMembers, chores, weekAssignments, weekDates)
 
   return (
     <div style={{ padding: 'var(--space-4)' }}>
 
-      {/* Viikkonavigaatio */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-1)' }}>
         <button
           type="button"
@@ -164,7 +144,6 @@ export function WeekView({ childNames, chores, weeklyPlans, onChildClick }: Prop
         Yleiskuva viikon kotitöistä ja kunkin lapsen tilanteesta.
       </p>
 
-      {/* Päivät Ma–Su */}
       {DAY_KEYS.map((dayKey, i) => {
         const date = weekDates[i]
         const past = isPast(date)
@@ -187,8 +166,8 @@ export function WeekView({ childNames, chores, weeklyPlans, onChildClick }: Prop
               {plannableChores.length === 0 ? (
                 <p style={{ fontSize: 12, opacity: 0.4, margin: 0 }}>Ei kotitöitä.</p>
               ) : plannableChores.map(chore => {
-                const assignment = weeklyPlan.find(a => a.choreId === chore.id)
-                const assignee = getAssignee(assignment, chore, dayKey)
+                const assigneeUid = getAssigneeUid(weekAssignments[chore.id], chore, dayKey)
+                const assigneeName = firestoreMembers.find(m => m.uid === assigneeUid)?.firstName ?? '–'
 
                 return (
                   <div
@@ -196,7 +175,7 @@ export function WeekView({ childNames, chores, weeklyPlans, onChildClick }: Prop
                     style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}
                   >
                     <span style={{ flex: 1 }}>{chore.name}</span>
-                    <span style={{ fontSize: 12, opacity: 0.6 }}>{assignee}</span>
+                    <span style={{ fontSize: 12, opacity: 0.6 }}>{assigneeName}</span>
                     <span
                       className={`tag ${past ? 'tag-accent' : 'tag-outline'}`}
                       style={{ width: 64, textAlign: 'center', fontSize: 11 }}
@@ -211,14 +190,13 @@ export function WeekView({ childNames, chores, weeklyPlans, onChildClick }: Prop
         )
       })}
 
-      {/* Lapset tällä viikolla */}
-      {childNames.length > 0 && (
+      {childMembers.length > 0 && (
         <>
           <h5 style={{ margin: 'var(--space-4) 0 var(--space-2)' }}>Lapset tällä viikolla</h5>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-            {childSummaries.map(({ name, doneCount, totalCount, earnedCents }) => (
+            {childSummaries.map(({ uid, firstName, doneCount, totalCount, earnedCents }) => (
               <button
-                key={name}
+                key={uid}
                 type="button"
                 className="card"
                 style={{
@@ -226,7 +204,7 @@ export function WeekView({ childNames, chores, weeklyPlans, onChildClick }: Prop
                   width: '100%', textAlign: 'left', cursor: 'pointer',
                   background: 'none', border: 'none', padding: 'var(--space-3)',
                 }}
-                onClick={() => onChildClick(name)}
+                onClick={() => onChildClick(uid)}
               >
                 <div style={{
                   width: 34, height: 34, borderRadius: '50%',
@@ -234,11 +212,11 @@ export function WeekView({ childNames, chores, weeklyPlans, onChildClick }: Prop
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 15, flexShrink: 0,
                 }}>
-                  {name[0]?.toUpperCase()}
+                  {firstName[0]?.toUpperCase()}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 14 }}>
-                    {name}
+                    {firstName}
                   </div>
                   <div style={{ fontSize: 11.5, opacity: 0.6 }}>
                     {doneCount}/{totalCount} tehty · Ansaittu {formatPrice(earnedCents)} €

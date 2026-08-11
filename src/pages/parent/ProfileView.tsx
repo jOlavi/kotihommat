@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { AbsenceDialog } from '@/pages/parent/AbsenceDialog'
-import { Chore } from '@/pages/parent/ChoreDialog'
-import { DayKey, WeekAssignment } from '@/pages/parent/ChoresView'
+import { Chore, Assignment, DayKey, Member } from '@/types'
 import { updateChildPinFn } from '@/lib/functions'
 
 export type DayStatus = 'full' | 'partial' | 'future' | 'poissa'
@@ -56,12 +55,6 @@ function getWeekDates(offsetWeeks: number): Date[] {
   })
 }
 
-function getWeekId(offsetWeeks: number): string {
-  const ref = new Date()
-  ref.setDate(ref.getDate() + offsetWeeks * 7)
-  return `${ref.getFullYear()}-W${String(getISOWeek(ref)).padStart(2, '0')}`
-}
-
 function isPast(date: Date): boolean {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -83,11 +76,6 @@ function formatPrice(cents: number): string {
   return (cents / 100).toLocaleString('fi-FI', { minimumFractionDigits: 2 })
 }
 
-function getAssignee(assignment: WeekAssignment | undefined, chore: Chore, dayKey: DayKey): string {
-  if (chore.type === 'paivittainen') return assignment?.days[dayKey] ?? chore.assignedChildNames[0] ?? '–'
-  return assignment?.all ?? chore.assignedChildNames[0] ?? '–'
-}
-
 const STATUS_META: Record<DayStatus, { tag: string; label: string }> = {
   full:    { tag: 'tag-accent',  label: 'Valmis' },
   partial: { tag: 'tag-outline', label: 'Kesken' },
@@ -106,24 +94,23 @@ export function makeDefaultProfile(): ChildProfile {
 }
 
 interface Props {
-  childNames: string[]
   initialChild?: string
   profiles: Record<string, ChildProfile>
   updateProfile: (name: string, fn: (p: ChildProfile) => ChildProfile) => void
   chores: Chore[]
-  weeklyPlans: Record<string, WeekAssignment[]>
   familyId: string
-  firestoreMembers: Array<{ uid: string; firstName: string; username?: string; pin?: string }>
+  firestoreMembers: Member[]
 }
 
 export function ProfileView({
-  childNames, initialChild, profiles, updateProfile,
-  chores, weeklyPlans, familyId, firestoreMembers
+  initialChild, profiles, updateProfile, chores, familyId, firestoreMembers
 }: Props) {
-  const [selectedName, setSelectedName] = useState(
-    () => (initialChild && childNames.includes(initialChild))
+  const childMembers = firestoreMembers.filter(m => m.role === 'child')
+
+  const [selectedUid, setSelectedUid] = useState(
+    () => (initialChild && childMembers.some(m => m.uid === initialChild))
       ? initialChild
-      : (childNames[0] ?? '')
+      : (childMembers[0]?.uid ?? '')
   )
   const [absenceOpen, setAbsenceOpen] = useState(false)
   const [weekOffset, setWeekOffset] = useState(0)
@@ -131,12 +118,15 @@ export function ProfileView({
   const [newPin, setNewPin] = useState('')
   const [pinLoading, setPinLoading] = useState(false)
   const [pinError, setPinError] = useState('')
+  const [weekAssignments, setWeekAssignments] = useState<Record<string, Assignment>>({})
+  // subscription lisätään Task 3:ssa
+  void setWeekAssignments
 
   useEffect(() => {
     setPinEditing(false)
     setNewPin('')
     setPinError('')
-  }, [selectedName])
+  }, [selectedUid])
 
   const handleAbsenceSave = (type: 'Loma' | 'Sairas', from: string, to: string) => {
     const fmt = (s: string) =>
@@ -145,14 +135,17 @@ export function ProfileView({
       day: 'numeric', month: 'numeric', year: 'numeric',
     })
     const range = from === to ? toFull : `${fmt(from)}–${toFull}`
-    updateProfile(selectedName, p => ({
-      ...p,
-      absences: [...p.absences, { id: crypto.randomUUID(), type, range }],
-    }))
+    const memberForProfile = childMembers.find(m => m.uid === selectedUid)
+    if (memberForProfile) {
+      updateProfile(memberForProfile.firstName, p => ({
+        ...p,
+        absences: [...p.absences, { id: crypto.randomUUID(), type, range }],
+      }))
+    }
     setAbsenceOpen(false)
   }
 
-  if (childNames.length === 0) {
+  if (childMembers.length === 0) {
     return (
       <div style={{ padding: 'var(--space-4)' }}>
         <p className="text-muted">Ei lapsia. Lisää lapsia Perhe-välilehdeltä.</p>
@@ -160,25 +153,26 @@ export function ProfileView({
     )
   }
 
-  const profile = profiles[selectedName] ?? makeDefaultProfile()
+  const selectedMember = childMembers.find(m => m.uid === selectedUid)
+  const profile = profiles[selectedMember?.firstName ?? ''] ?? makeDefaultProfile()
 
   return (
     <div style={{ padding: 'var(--space-4)' }}>
       <h2 style={{ margin: '0 0 var(--space-3)' }}>Lapsen profiili</h2>
 
       <div className="seg" style={{ width: '100%', marginBottom: 'var(--space-4)' }}>
-        {childNames.map(n => (
-          <label key={n} className="seg-opt" style={{ flex: 1, justifyContent: 'center' }}>
+        {childMembers.map(m => (
+          <label key={m.uid} className="seg-opt" style={{ flex: 1, justifyContent: 'center' }}>
             <input type="radio" name="profiletab"
-              checked={selectedName === n} onChange={() => setSelectedName(n)} />
-            {n}
+              checked={selectedUid === m.uid} onChange={() => setSelectedUid(m.uid)} />
+            {m.firstName}
           </label>
         ))}
       </div>
 
       {/* Kirjautumistiedot */}
       {(() => {
-        const member = firestoreMembers.find(m => m.firstName === selectedName)
+        const member = firestoreMembers.find(m => m.uid === selectedUid)
         if (!member) return null
         const displayUsername = member.username
           ? (() => { const [n, c] = member.username!.split('.'); return `${n}.${(c ?? '').toUpperCase()}` })()
@@ -283,17 +277,16 @@ export function ProfileView({
 
       {(() => {
         const weekDates = getWeekDates(weekOffset)
-        const weekId = getWeekId(weekOffset)
-        const weeklyPlan = weeklyPlans[weekId] ?? []
-        const plannableChores = chores.filter(c => c.type !== 'kertaluontoinen')
+        const plannableChores = chores.filter(c => c.type !== 'once')
 
         return DAY_KEYS.map((dayKey, i) => {
           const date = weekDates[i]
           const past = isPast(date)
           const today = isToday(date)
           const childChores = plannableChores.filter(chore => {
-            const assignment = weeklyPlan.find(a => a.choreId === chore.id)
-            return getAssignee(assignment, chore, dayKey) === selectedName
+            const assignment = weekAssignments[chore.id]
+            if (chore.type === 'daily') return assignment?.[dayKey] === selectedUid
+            return assignment?.all === selectedUid
           })
           if (childChores.length === 0) return null
 
@@ -347,7 +340,7 @@ export function ProfileView({
 
       {absenceOpen && (
         <AbsenceDialog
-          childName={selectedName}
+          childName={selectedMember?.firstName ?? ''}
           onSave={handleAbsenceSave}
           onClose={() => setAbsenceOpen(false)}
         />
