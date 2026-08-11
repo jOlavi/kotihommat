@@ -12,11 +12,7 @@ import { db } from "@/lib/firebase";
 import { FamilyView } from "@/pages/parent/FamilyView";
 import { ChoresView } from "@/pages/parent/ChoresView";
 import { WeekView } from "@/pages/parent/WeekView";
-import {
-  ProfileView,
-  ChildProfile,
-  makeDefaultProfile,
-} from "@/pages/parent/ProfileView";
+import { ProfileView } from "@/pages/parent/ProfileView";
 import { PayView } from "@/pages/parent/PayView";
 import { Chore, Member } from "@/types"
 
@@ -32,7 +28,6 @@ export function ParentShell({ familyId, creatorName, onSignOut }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("chores");
   const [chores, setChores] = useState<Chore[]>([]);
   const [profileChildId, setProfileChildId] = useState("");
-  const [profiles, setProfiles] = useState<Record<string, ChildProfile>>({});
   const [firestoreMembers, setFirestoreMembers] = useState<Member[]>([]);
 
   useEffect(() => {
@@ -45,25 +40,8 @@ export function ParentShell({ familyId, creatorName, onSignOut }: Props) {
     return onSnapshot(collection(db, `families/${familyId}/members`), (snap) => {
       const members = snap.docs.map(d => ({ uid: d.id, ...d.data() } as Member));
       setFirestoreMembers(members);
-      setProfiles(prev => {
-        const next = { ...prev };
-        members.filter(m => m.role === 'child').forEach(m => {
-          if (!next[m.firstName]) next[m.firstName] = makeDefaultProfile();
-        });
-        return next;
-      });
     });
   }, [familyId]);
-
-  const updateProfile = (name: string, fn: (p: ChildProfile) => ChildProfile) =>
-    setProfiles((prev) => ({
-      ...prev,
-      [name]: fn(prev[name] ?? makeDefaultProfile()),
-    }));
-
-  const childNames = firestoreMembers
-    .filter(m => m.role === 'child')
-    .map(m => m.firstName);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "chores", label: "Kotityöt", icon: <ListChecks size={20} /> },
@@ -143,8 +121,6 @@ export function ParentShell({ familyId, creatorName, onSignOut }: Props) {
         {activeTab === "lapset" && (
           <ProfileView
             initialChild={profileChildId}
-            profiles={profiles}
-            updateProfile={updateProfile}
             chores={chores}
             familyId={familyId}
             firestoreMembers={firestoreMembers}
@@ -152,9 +128,8 @@ export function ParentShell({ familyId, creatorName, onSignOut }: Props) {
         )}
         {activeTab === "maksut" && (
           <PayView
-            childNames={childNames}
-            profiles={profiles}
-            updateProfile={updateProfile}
+            familyId={familyId}
+            firestoreMembers={firestoreMembers}
           />
         )}
       </main>

@@ -1,35 +1,21 @@
 import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { collection, doc, onSnapshot, updateDoc } from 'firebase/firestore'
+import { collection, doc, onSnapshot, updateDoc, addDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { updateChildAuthPin } from '@/lib/childAuth'
 import { AbsenceDialog } from '@/pages/parent/AbsenceDialog'
-import { Chore, Assignment, DayKey, Member } from '@/types'
+import { Chore, Assignment, DayKey, Member, TaskInstance } from '@/types'
 
 export type DayStatus = 'full' | 'partial' | 'future' | 'poissa'
 
-export interface Absence {
+interface FirestoreAbsence {
   id: string
   type: 'Loma' | 'Sairas'
-  range: string
-}
-
-export interface Payment {
-  id: string
-  amountCents: number
-  date: string
-}
-
-export interface ChildProfile {
-  earnedCents: number
-  paidCents: number
-  weekGrid: DayStatus[]
-  absences: Absence[]
-  payments: Payment[]
+  from: string
+  to: string
 }
 
 const DAY_SHORTS = ['Ma', 'Ti', 'Ke', 'To', 'Pe', 'La', 'Su']
-
 const DAY_KEYS: DayKey[] = ['ma', 'ti', 'ke', 'to', 'pe', 'la', 'su']
 const DAY_NAMES: Record<DayKey, string> = {
   ma: 'Maanantai', ti: 'Tiistai', ke: 'Keskiviikko',
@@ -42,6 +28,12 @@ function getISOWeek(date: Date): number {
   d.setUTCDate(d.getUTCDate() + 4 - dayNum)
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
   return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+}
+
+function getWeekId(offsetWeeks: number): string {
+  const ref = new Date()
+  ref.setDate(ref.getDate() + offsetWeeks * 7)
+  return `${ref.getFullYear()}-W${String(getISOWeek(ref)).padStart(2, '0')}`
 }
 
 function getWeekDates(offsetWeeks: number): Date[] {
@@ -58,24 +50,26 @@ function getWeekDates(offsetWeeks: number): Date[] {
 }
 
 function isPast(date: Date): boolean {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const d = new Date(date)
-  d.setHours(0, 0, 0, 0)
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const d = new Date(date); d.setHours(0, 0, 0, 0)
   return d < today
 }
 
 function isToday(date: Date): boolean {
   const today = new Date()
-  return (
-    date.getFullYear() === today.getFullYear() &&
-    date.getMonth() === today.getMonth() &&
-    date.getDate() === today.getDate()
-  )
+  return date.getFullYear() === today.getFullYear()
+    && date.getMonth() === today.getMonth()
+    && date.getDate() === today.getDate()
 }
 
 function formatPrice(cents: number): string {
   return (cents / 100).toLocaleString('fi-FI', { minimumFractionDigits: 2 })
+}
+
+function formatAbsenceRange(from: string, to: string): string {
+  const fmt = (s: string) => new Date(s).toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })
+  const toFull = new Date(to).toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric', year: 'numeric' })
+  return from === to ? toFull : `${fmt(from)}–${toFull}`
 }
 
 const STATUS_META: Record<DayStatus, { tag: string; label: string }> = {
@@ -85,28 +79,14 @@ const STATUS_META: Record<DayStatus, { tag: string; label: string }> = {
   poissa:  { tag: 'tag-neutral', label: 'Poissa' },
 }
 
-export function makeDefaultProfile(): ChildProfile {
-  return {
-    earnedCents: 1850,
-    paidCents: 1200,
-    weekGrid: ['full', 'full', 'partial', 'future', 'future', 'future', 'future'],
-    absences: [],
-    payments: [{ id: 'p1', amountCents: 1200, date: '1.8.2026' }],
-  }
-}
-
 interface Props {
   initialChild?: string
-  profiles: Record<string, ChildProfile>
-  updateProfile: (name: string, fn: (p: ChildProfile) => ChildProfile) => void
   chores: Chore[]
   familyId: string
   firestoreMembers: Member[]
 }
 
-export function ProfileView({
-  initialChild, profiles, updateProfile, chores, familyId, firestoreMembers
-}: Props) {
+export function ProfileView({ initialChild, chores, familyId, firestoreMembers }: Props) {
   const childMembers = firestoreMembers.filter(m => m.role === 'child')
 
   const [selectedUid, setSelectedUid] = useState(
@@ -121,16 +101,11 @@ export function ProfileView({
   const [pinLoading, setPinLoading] = useState(false)
   const [pinError, setPinError] = useState('')
   const [weekAssignments, setWeekAssignments] = useState<Record<string, Assignment>>({})
+  const [allTaskInstances, setAllTaskInstances] = useState<TaskInstance[]>([])
+  const [absences, setAbsences] = useState<FirestoreAbsence[]>([])
 
   useEffect(() => {
-    const ref = new Date()
-    ref.setDate(ref.getDate() + weekOffset * 7)
-    const d2 = new Date(Date.UTC(ref.getFullYear(), ref.getMonth(), ref.getDate()))
-    const dayNum = d2.getUTCDay() || 7
-    d2.setUTCDate(d2.getUTCDate() + 4 - dayNum)
-    const yearStart = new Date(Date.UTC(d2.getUTCFullYear(), 0, 1))
-    const week = Math.ceil((((d2.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
-    const weekId = `${ref.getFullYear()}-W${String(week).padStart(2, '0')}`
+    const weekId = getWeekId(weekOffset)
     return onSnapshot(
       collection(db, `families/${familyId}/weeklyPlans/${weekId}/assignments`),
       snap => {
@@ -142,25 +117,48 @@ export function ProfileView({
   }, [familyId, weekOffset])
 
   useEffect(() => {
-    setPinEditing(false)
-    setNewPin('')
-    setPinError('')
+    return onSnapshot(
+      collection(db, `families/${familyId}/taskInstances`),
+      snap => setAllTaskInstances(snap.docs.map(d => ({ id: d.id, ...d.data() } as TaskInstance)))
+    )
+  }, [familyId])
+
+  useEffect(() => {
+    if (!selectedUid) return
+    return onSnapshot(
+      collection(db, `families/${familyId}/members/${selectedUid}/absences`),
+      snap => setAbsences(
+        snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as FirestoreAbsence))
+          .sort((a, b) => b.from.localeCompare(a.from))
+      )
+    )
+  }, [familyId, selectedUid])
+
+  useEffect(() => {
+    setPinEditing(false); setNewPin(''); setPinError('')
   }, [selectedUid])
 
-  const handleAbsenceSave = (type: 'Loma' | 'Sairas', from: string, to: string) => {
-    const fmt = (s: string) =>
-      new Date(s).toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })
-    const toFull = new Date(to).toLocaleDateString('fi-FI', {
-      day: 'numeric', month: 'numeric', year: 'numeric',
-    })
-    const range = from === to ? toFull : `${fmt(from)}–${toFull}`
-    const memberForProfile = childMembers.find(m => m.uid === selectedUid)
-    if (memberForProfile) {
-      updateProfile(memberForProfile.firstName, p => ({
-        ...p,
-        absences: [...p.absences, { id: crypto.randomUUID(), type, range }],
-      }))
-    }
+  const weekId = getWeekId(weekOffset)
+  const weekTaskInstances = allTaskInstances.filter(t => t.memberId === selectedUid && t.isoWeek === weekId)
+
+  const weekGrid: DayStatus[] = getWeekDates(weekOffset).map(date => {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const d = new Date(date); d.setHours(0, 0, 0, 0)
+    if (d > today) return 'future'
+    const iso = date.toISOString().slice(0, 10)
+    const dayInstances = weekTaskInstances.filter(t => t.date === iso)
+    if (dayInstances.length === 0) return 'future'
+    const allDone = dayInstances.every(t => t.status === 'tehty' || t.status === 'merkitty')
+    const anyDone = dayInstances.some(t => t.status === 'tehty' || t.status === 'merkitty')
+    return allDone ? 'full' : anyDone ? 'partial' : 'partial'
+  })
+
+  const handleAbsenceSave = async (type: 'Loma' | 'Sairas', from: string, to: string) => {
+    if (!selectedUid) return
+    try {
+      await addDoc(collection(db, `families/${familyId}/members/${selectedUid}/absences`), { type, from, to })
+    } catch { /* ignore */ }
     setAbsenceOpen(false)
   }
 
@@ -173,7 +171,6 @@ export function ProfileView({
   }
 
   const selectedMember = childMembers.find(m => m.uid === selectedUid)
-  const profile = profiles[selectedMember?.firstName ?? ''] ?? makeDefaultProfile()
 
   return (
     <div style={{ padding: 'var(--space-4)' }}>
@@ -200,18 +197,13 @@ export function ProfileView({
         const handleSavePin = async () => {
           if (!/^\d{4}$/.test(newPin)) { setPinError('PIN tulee olla 4 numeroa'); return }
           if (!member.username || !member.pin) { setPinError('Käyttäjätiedot puuttuvat'); return }
-          setPinLoading(true)
-          setPinError('')
+          setPinLoading(true); setPinError('')
           try {
             await updateChildAuthPin(member.username, member.pin, newPin)
             await updateDoc(doc(db, `families/${familyId}/members/${member.uid}`), { pin: newPin })
-            setPinEditing(false)
-            setNewPin('')
-          } catch {
-            setPinError('PIN:n vaihto epäonnistui')
-          } finally {
-            setPinLoading(false)
-          }
+            setPinEditing(false); setNewPin('')
+          } catch { setPinError('PIN:n vaihto epäonnistui') }
+          finally { setPinLoading(false) }
         }
 
         return (
@@ -226,25 +218,14 @@ export function ProfileView({
                 <span style={{ opacity: 0.6, width: 80 }}>PIN</span>
                 {pinEditing ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                    <input
-                      className="input"
-                      type="password"
-                      inputMode="numeric"
-                      maxLength={4}
-                      placeholder="1234"
-                      value={newPin}
+                    <input className="input" type="password" inputMode="numeric" maxLength={4}
+                      placeholder="1234" value={newPin}
                       onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                      style={{ width: 80, padding: '2px 8px', fontSize: 13 }}
-                      autoFocus
-                    />
+                      style={{ width: 80, padding: '2px 8px', fontSize: 13 }} autoFocus />
                     <button type="button" className="btn btn-primary" style={{ padding: '2px 10px', fontSize: 12 }}
-                      onClick={handleSavePin} disabled={pinLoading || newPin.length !== 4}>
-                      Tallenna
-                    </button>
+                      onClick={handleSavePin} disabled={pinLoading || newPin.length !== 4}>Tallenna</button>
                     <button type="button" className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: 12 }}
-                      onClick={() => { setPinEditing(false); setNewPin(''); setPinError('') }}>
-                      Peruuta
-                    </button>
+                      onClick={() => { setPinEditing(false); setNewPin(''); setPinError('') }}>Peruuta</button>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
@@ -252,9 +233,7 @@ export function ProfileView({
                       {member.pin ?? '••••'}
                     </span>
                     <button type="button" className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: 12 }}
-                      onClick={() => setPinEditing(true)}>
-                      Vaihda
-                    </button>
+                      onClick={() => setPinEditing(true)}>Vaihda</button>
                   </div>
                 )}
               </div>
@@ -264,8 +243,9 @@ export function ProfileView({
         )
       })()}
 
+      {/* 7-päivän minikaavakon */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 'var(--space-4)' }}>
-        {profile.weekGrid.map((status, i) => (
+        {weekGrid.map((status, i) => (
           <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
             <span style={{ fontSize: 10, opacity: 0.55 }}>{DAY_SHORTS[i]}</span>
             <span className={`tag ${STATUS_META[status].tag}`} style={{ fontSize: 9, padding: '2px 5px' }}>
@@ -277,23 +257,11 @@ export function ProfileView({
 
       {/* Viikkoaikataulu */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-1)' }}>
-        <button
-          type="button"
-          className="btn btn-ghost btn-icon"
-          aria-label="Edellinen viikko"
-          onClick={() => setWeekOffset(o => o - 1)}
-        >
-          <ChevronLeft size={15} />
-        </button>
+        <button type="button" className="btn btn-ghost btn-icon" aria-label="Edellinen viikko"
+          onClick={() => setWeekOffset(o => o - 1)}><ChevronLeft size={15} /></button>
         <h5 style={{ margin: 0 }}>Viikko {getISOWeek((() => { const d = new Date(); d.setDate(d.getDate() + weekOffset * 7); return d })())}</h5>
-        <button
-          type="button"
-          className="btn btn-ghost btn-icon"
-          aria-label="Seuraava viikko"
-          onClick={() => setWeekOffset(o => o + 1)}
-        >
-          <ChevronRight size={15} />
-        </button>
+        <button type="button" className="btn btn-ghost btn-icon" aria-label="Seuraava viikko"
+          onClick={() => setWeekOffset(o => o + 1)}><ChevronRight size={15} /></button>
       </div>
 
       {(() => {
@@ -302,8 +270,8 @@ export function ProfileView({
 
         return DAY_KEYS.map((dayKey, i) => {
           const date = weekDates[i]
-          const past = isPast(date)
           const today = isToday(date)
+          const iso = date.toISOString().slice(0, 10)
           const childChores = plannableChores.filter(chore => {
             const assignment = weekAssignments[chore.id]
             if (chore.type === 'daily') return assignment?.[dayKey] === selectedUid
@@ -316,24 +284,24 @@ export function ProfileView({
               <div className="hr" />
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', margin: 'var(--space-2) 0 var(--space-1)' }}>
                 <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 13 }}>{DAY_NAMES[dayKey]}</span>
-                <span style={{ fontSize: 11, opacity: 0.5 }}>
-                  {date.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })}
-                </span>
+                <span style={{ fontSize: 11, opacity: 0.5 }}>{date.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })}</span>
                 {today && <span className="tag tag-outline" style={{ fontSize: 10 }}>Tänään</span>}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 'var(--space-3)' }}>
-                {childChores.map(chore => (
-                  <div key={chore.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}>
-                    <span style={{ flex: 1 }}>{chore.name}</span>
-                    <span style={{ fontSize: 12, opacity: 0.55 }}>{formatPrice(chore.priceCents)} €</span>
-                    <span
-                      className={`tag ${past ? 'tag-accent' : 'tag-outline'}`}
-                      style={{ width: 64, textAlign: 'center', fontSize: 11 }}
-                    >
-                      {past ? 'Tehty' : 'Kesken'}
-                    </span>
-                  </div>
-                ))}
+                {childChores.map(chore => {
+                  const instance = weekTaskInstances.find(t => t.choreId === chore.id && t.date === iso)
+                  const done = instance?.status === 'tehty' || instance?.status === 'merkitty'
+                  return (
+                    <div key={chore.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}>
+                      <span style={{ flex: 1 }}>{chore.name}</span>
+                      <span style={{ fontSize: 12, opacity: 0.55 }}>{formatPrice(chore.priceCents)} €</span>
+                      <span className={`tag ${done ? 'tag-accent' : isPast(date) ? 'tag-outline' : 'tag-neutral'}`}
+                        style={{ width: 64, textAlign: 'center', fontSize: 11 }}>
+                        {done ? 'Tehty' : isPast(date) ? 'Tekemättä' : 'Kesken'}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )
@@ -344,18 +312,17 @@ export function ProfileView({
       <div className="hr" />
       <h5 style={{ margin: '0 0 var(--space-2)' }}>Poissaolot</h5>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 'var(--space-4)' }}>
-        {profile.absences.length === 0 ? (
+        {absences.length === 0 ? (
           <p style={{ fontSize: 12, opacity: 0.5, margin: 0 }}>Ei merkittyjä poissaoloja.</p>
-        ) : profile.absences.map(a => (
+        ) : absences.map(a => (
           <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}>
             <span className="tag tag-neutral">{a.type}</span>
-            <span style={{ opacity: 0.7 }}>{a.range}</span>
+            <span style={{ opacity: 0.7 }}>{formatAbsenceRange(a.from, a.to)}</span>
           </div>
         ))}
       </div>
 
-      <button type="button" className="btn btn-secondary btn-block"
-        onClick={() => setAbsenceOpen(true)}>
+      <button type="button" className="btn btn-secondary btn-block" onClick={() => setAbsenceOpen(true)}>
         Merkitse poissaolo
       </button>
 
