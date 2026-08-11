@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
-import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc } from 'firebase/firestore'
+import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { ChoreDialog, ChoreFormData } from '@/pages/parent/ChoreDialog'
 import { Chore, Assignment, DayKey, Member } from '@/types'
@@ -37,6 +37,19 @@ function getWeekId(offsetWeeks: number): string {
   const ref = new Date()
   ref.setDate(ref.getDate() + offsetWeeks * 7)
   return `${ref.getFullYear()}-W${String(getISOWeek(ref)).padStart(2, '0')}`
+}
+
+function getWeekDates(offsetWeeks: number): Array<{ date: string; dayKey: DayKey }> {
+  const ref = new Date()
+  ref.setDate(ref.getDate() + offsetWeeks * 7)
+  const day = ref.getDay() || 7
+  const monday = new Date(ref)
+  monday.setDate(ref.getDate() - day + 1)
+  return DAY_KEYS.map((dayKey, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    return { date: d.toISOString().slice(0, 10), dayKey }
+  })
 }
 
 function formatPrice(cents: number): string {
@@ -139,6 +152,7 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
   const handleSavePlan = async () => {
     setPlannerError('')
     const weekId = getWeekId(weekOffset)
+    const weekDates = getWeekDates(weekOffset)
     try {
       await Promise.all(
         plannerDraft.map(({ choreId, assignment }) =>
@@ -149,6 +163,34 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
           )
         )
       )
+
+      const batch = writeBatch(db)
+      for (const { choreId, assignment } of plannerDraft) {
+        const chore = chores.find(c => c.id === choreId)
+        if (!chore) continue
+        if (chore.type === 'daily') {
+          for (const { date, dayKey } of weekDates) {
+            const memberId = assignment[dayKey]
+            if (!memberId) continue
+            batch.set(
+              doc(db, `families/${familyId}/taskInstances/${choreId}_${memberId}_${date}`),
+              { choreId, choreName: chore.name, memberId, date, isoWeek: weekId, priceCents: chore.priceCents },
+              { merge: true }
+            )
+          }
+        } else if (chore.type === 'weekly') {
+          const memberId = assignment.all
+          if (!memberId) continue
+          const date = weekDates[0].date
+          batch.set(
+            doc(db, `families/${familyId}/taskInstances/${choreId}_${memberId}_${date}`),
+            { choreId, choreName: chore.name, memberId, date, isoWeek: weekId, priceCents: chore.priceCents },
+            { merge: true }
+          )
+        }
+      }
+      await batch.commit()
+
       setPlannerSaved(true)
       setTimeout(() => setPlannerSaved(false), 1500)
     } catch {

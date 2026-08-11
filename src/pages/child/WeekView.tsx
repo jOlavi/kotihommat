@@ -1,7 +1,7 @@
-import { Task, MockStatus } from '@/pages/child/TodayView'
+import { TaskInstance, TaskStatus } from '@/types'
 
 interface Props {
-  tasks: Task[]
+  tasks: TaskInstance[]
   today: string
 }
 
@@ -33,10 +33,10 @@ function toISODate(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
 
-const STATUS_TAG: Record<MockStatus, { className: string; label: string }> = {
-  tehty: { className: 'tag tag-accent', label: 'Tehty' },
-  tekematon: { className: 'tag tag-outline', label: 'Tekemättä' },
-  poissa: { className: 'tag tag-neutral', label: 'Poissa' },
+const STATUS_TAG: Record<TaskStatus, { className: string; label: string }> = {
+  tehty:     { className: 'tag tag-accent',   label: 'Tehty' },
+  tekematon: { className: 'tag tag-outline',  label: 'Tekemättä' },
+  merkitty:  { className: 'tag tag-neutral',  label: 'Maksettu' },
 }
 
 export function WeekView({ tasks, today }: Props) {
@@ -57,39 +57,21 @@ export function WeekView({ tasks, today }: Props) {
         return (
           <div key={iso}>
             <hr className="hr" style={{ margin: '0 0 var(--space-2)' }} />
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-2)',
-                marginBottom: 'var(--space-2)',
-              }}
-            >
-              <span style={{ fontSize: 14, fontWeight: 500 }}>
-                {DAY_NAMES[i]} {dateLabel}
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+              <span style={{ fontSize: 14, fontWeight: 500 }}>{DAY_NAMES[i]} {dateLabel}</span>
               {isToday && <span className="tag tag-outline">Tänään</span>}
             </div>
 
             {dayTasks.length === 0 ? (
-              <p className="text-muted" style={{ fontSize: 13, margin: 0 }}>
-                Ei tehtäviä
-              </p>
+              <p className="text-muted" style={{ fontSize: 13, margin: 0 }}>Ei tehtäviä</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
                 {dayTasks.map(task => {
-                  const { className, label } = STATUS_TAG[task.status]
+                  const status = task.status ?? 'tekematon'
+                  const { className, label } = STATUS_TAG[status]
                   return (
-                    <div
-                      key={task.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 'var(--space-3)',
-                        padding: 'var(--space-1) 0',
-                      }}
-                    >
-                      <span style={{ flex: 1, fontSize: 15 }}>{task.name}</span>
+                    <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-1) 0' }}>
+                      <span style={{ flex: 1, fontSize: 15 }}>{task.choreName}</span>
                       <span className={className}>{label}</span>
                     </div>
                   )

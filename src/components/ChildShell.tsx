@@ -1,55 +1,72 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Home, CalendarDays, PiggyBank, Settings } from 'lucide-react'
-import { TodayView, Task } from '@/pages/child/TodayView'
+import { collection, doc, onSnapshot, updateDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { TodayView } from '@/pages/child/TodayView'
 import { WeekView } from '@/pages/child/WeekView'
 import { BalanceView } from '@/pages/child/BalanceView'
+import { TaskInstance } from '@/types'
 
 type Tab = 'today' | 'week' | 'balance'
 
 interface Props {
   familyId: string
+  uid: string
   childName: string
   onSignOut: () => void
 }
 
-function dateOffset(days: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() + days)
-  return d.toISOString().slice(0, 10)
+function getCurrentWeekId(): string {
+  const now = new Date()
+  const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
+  const dayNum = d.getUTCDay() || 7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  const week = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+  return `${now.getFullYear()}-W${String(week).padStart(2, '0')}`
 }
 
+const WEEK_ID = getCurrentWeekId()
 const TODAY = new Date().toISOString().slice(0, 10)
 
-const INITIAL_WEEK_TASKS: Task[] = [
-  // Eilen — kaikki tehty
-  { id: 'y1', name: 'Astianpesukoneen tyhjennys', priceCents: 50, date: dateOffset(-1), status: 'tehty' },
-  { id: 'y2', name: 'Koiran ulkoilutus', priceCents: 100, date: dateOffset(-1), status: 'tehty' },
-  // Tänään
-  { id: 't1', name: 'Astianpesukoneen tyhjennys', priceCents: 50, date: TODAY, status: 'tekematon' },
-  { id: 't2', name: 'Koiran ulkoilutus', priceCents: 100, date: TODAY, status: 'tekematon' },
-  { id: 't3', name: 'Roskat ulos', priceCents: 50, date: TODAY, status: 'tehty' },
-  // Ylihuomenna — poissa
-  { id: 'a1', name: 'Koiran ulkoilutus', priceCents: 100, date: dateOffset(2), status: 'poissa' },
-  { id: 'a2', name: 'Astianpesukoneen tyhjennys', priceCents: 50, date: dateOffset(2), status: 'poissa' },
-  // +3 päivää
-  { id: 'b1', name: 'Roskat ulos', priceCents: 50, date: dateOffset(3), status: 'tekematon' },
-  { id: 'b2', name: 'Koiran ulkoilutus', priceCents: 100, date: dateOffset(3), status: 'tekematon' },
-]
-
-export function ChildShell({ familyId: _familyId, childName, onSignOut }: Props) {
+export function ChildShell({ familyId, uid, childName, onSignOut }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('today')
-  const [tasks, setTasks] = useState<Task[]>(INITIAL_WEEK_TASKS)
+  const [taskInstances, setTaskInstances] = useState<TaskInstance[]>([])
+  const [paidTotal, setPaidTotal] = useState(0)
 
-  const todayTasks = tasks.filter(t => t.date === TODAY)
-
-  const handleToggle = (id: string) => {
-    setTasks(prev =>
-      prev.map(t =>
-        t.id === id
-          ? { ...t, status: t.status === 'tehty' ? 'tekematon' : 'tehty' }
-          : t
-      )
+  useEffect(() => {
+    return onSnapshot(
+      collection(db, `families/${familyId}/taskInstances`),
+      snap => {
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as TaskInstance))
+        setTaskInstances(all.filter(t => t.memberId === uid))
+      }
     )
+  }, [familyId, uid])
+
+  useEffect(() => {
+    return onSnapshot(
+      doc(db, `families/${familyId}/members/${uid}`),
+      snap => {
+        if (snap.exists()) setPaidTotal(snap.data().paidTotal ?? 0)
+      }
+    )
+  }, [familyId, uid])
+
+  const todayTasks = taskInstances.filter(t => t.date === TODAY)
+  const weekTasks = taskInstances.filter(t => t.isoWeek === WEEK_ID)
+  const earnedCents = taskInstances
+    .filter(t => t.status === 'tehty' || t.status === 'merkitty')
+    .reduce((sum, t) => sum + t.priceCents, 0)
+
+  const handleToggle = async (id: string) => {
+    const instance = taskInstances.find(t => t.id === id)
+    if (!instance || instance.status === 'merkitty') return
+    const newStatus = (instance.status ?? 'tekematon') === 'tehty' ? 'tekematon' : 'tehty'
+    await updateDoc(doc(db, `families/${familyId}/taskInstances/${id}`), {
+      status: newStatus,
+      completedAt: newStatus === 'tehty' ? new Date().toISOString() : null,
+    })
   }
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -77,40 +94,26 @@ export function ChildShell({ familyId: _familyId, childName, onSignOut }: Props)
         <button
           type="button"
           className="tag tag-accent"
-          style={{
-            border: 'none',
-            cursor: 'pointer',
-            fontFamily: 'var(--font-heading)',
-            fontWeight: 600,
-            fontSize: 15,
-          }}
+          style={{ border: 'none', cursor: 'pointer', fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 15 }}
           onClick={onSignOut}
         >
           {childName}
         </button>
         <span style={{
-          fontFamily: '"Bodoni Moda", var(--font-heading)',
-          fontWeight: 600,
-          fontSize: 22,
-          color: 'var(--color-accent)',
-          position: 'absolute',
-          left: '50%',
-          transform: 'translateX(-50%)',
-        }}>Kotihommat</span>
-        <button
-          type="button"
-          className="btn btn-ghost btn-icon"
-          aria-label="Asetukset"
-          style={{ marginLeft: 'auto' }}
-        >
+          fontFamily: '"Bodoni Moda", var(--font-heading)', fontWeight: 600, fontSize: 22,
+          color: 'var(--color-accent)', position: 'absolute', left: '50%', transform: 'translateX(-50%)',
+        }}>
+          Kotihommat
+        </span>
+        <button type="button" className="btn btn-ghost btn-icon" aria-label="Asetukset" style={{ marginLeft: 'auto' }}>
           <Settings size={18} />
         </button>
       </header>
 
       <main style={{ flex: 1, overflowY: 'auto' }}>
         {activeTab === 'today' && <TodayView tasks={todayTasks} onToggle={handleToggle} />}
-        {activeTab === 'week' && <WeekView tasks={tasks} today={TODAY} />}
-        {activeTab === 'balance' && <BalanceView />}
+        {activeTab === 'week' && <WeekView tasks={weekTasks} today={TODAY} />}
+        {activeTab === 'balance' && <BalanceView earnedCents={earnedCents} paidCents={paidTotal} />}
       </main>
 
       <nav style={{ display: 'flex', borderTop: '1px solid var(--color-divider)', flex: 'none' }}>
@@ -120,20 +123,12 @@ export function ChildShell({ familyId: _familyId, childName, onSignOut }: Props)
             type="button"
             onClick={() => setActiveTab(tab.id)}
             style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 4,
-              padding: 'var(--space-2) 0 var(--space-3)',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: 11,
+              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+              padding: 'var(--space-2) 0 var(--space-3)', background: 'none', border: 'none',
+              cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font-body)',
               color: activeTab === tab.id
                 ? 'var(--color-accent)'
                 : 'color-mix(in srgb, var(--color-text) 40%, transparent)',
-              fontFamily: 'var(--font-body)',
             }}
           >
             {tab.icon}

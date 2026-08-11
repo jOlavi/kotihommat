@@ -40,12 +40,13 @@ export interface WeeklyPlan {
 export interface TaskInstance {
   id: string
   choreId: string
+  choreName: string
   memberId: string
-  date: string
-  isoWeek: number
+  date: string        // 'YYYY-MM-DD'
+  isoWeek: string     // 'YYYY-WNN'
   priceCents: number
   status: TaskStatus
-  completedAt: Date | null
+  completedAt: string | null
 }
 
 export interface Absence {
