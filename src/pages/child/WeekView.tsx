@@ -1,8 +1,14 @@
-import { TaskInstance, TaskStatus } from '@/types'
+import { useEffect, useRef } from 'react'
+import { Absence, TaskInstance, TaskStatus } from '@/types'
 
 interface Props {
   tasks: TaskInstance[]
   today: string
+  absences: Absence[]
+}
+
+function isAbsent(absences: Absence[], dateISO: string): boolean {
+  return absences.some(a => a.from <= dateISO && dateISO <= a.to)
 }
 
 const DAY_NAMES = [
@@ -43,7 +49,13 @@ const STATUS_TAG: Record<TaskStatus, { className: string; label: string }> = {
   merkitty:  { className: 'tag tag-neutral', label: 'Maksettu' },
 }
 
-export function WeekView({ tasks, today }: Props) {
+export function WeekView({ tasks, today, absences }: Props) {
+  const todayRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    todayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
   const now = new Date()
   const weekNumber = getISOWeek(now)
   const weekDays = getWeekDays(now)
@@ -64,17 +76,55 @@ export function WeekView({ tasks, today }: Props) {
       {weekDays.map((day, i) => {
         const iso = toISODate(day)
         const isToday = iso === today
+        const absent = isAbsent(absences, iso)
         const dayTasks = tasks.filter(t => t.date === iso)
         const dateLabel = day.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })
 
+        if (isToday) {
+          return (
+            <div ref={todayRef} key={iso} style={{
+              border: '2px solid var(--color-accent)',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--color-accent-100)',
+              padding: 'var(--space-2) 8px',
+              margin: '0 -8px',
+              opacity: absent ? 0.6 : 1,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-accent-800)' }}>{DAY_NAMES[i]} {dateLabel}</span>
+                <span className="tag tag-accent" style={{ fontSize: 10 }}>Tänään</span>
+                {absent && <span className="tag tag-neutral">Poissa</span>}
+              </div>
+              {dayTasks.length === 0 ? (
+                <p className="text-muted" style={{ fontSize: 13, margin: 0 }}>Ei tehtäviä</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+                  {dayTasks.map(task => {
+                    const status = task.status ?? 'tekematon'
+                    const { className, label } = STATUS_TAG[status]
+                    return (
+                      <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-1) 0' }}>
+                        <span style={{ flex: 1, fontSize: 15 }}>{task.choreName}</span>
+                        {task.priceCents > 0 && <span style={{ fontSize: 13, opacity: 0.6 }}>{formatPrice(task.priceCents)} €</span>}
+                        <span className={className} style={{ display: 'flex', justifyContent: 'center', width: 64, fontSize: 11 }}>
+                          {label}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        }
+
         return (
-          <div key={iso}>
+          <div key={iso} style={{ opacity: absent ? 0.5 : 1 }}>
             <hr className="hr" style={{ margin: '0 0 var(--space-2)' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
               <span style={{ fontSize: 14, fontWeight: 500 }}>{DAY_NAMES[i]} {dateLabel}</span>
-              {isToday && <span className="tag tag-outline">Tänään</span>}
+              {absent && <span className="tag tag-neutral">Poissa</span>}
             </div>
-
             {dayTasks.length === 0 ? (
               <p className="text-muted" style={{ fontSize: 13, margin: 0 }}>Ei tehtäviä</p>
             ) : (

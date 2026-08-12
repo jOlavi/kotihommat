@@ -6,8 +6,6 @@ import { AbsenceDialog } from '@/pages/parent/AbsenceDialog'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Chore, Assignment, DayKey, Member, TaskInstance } from '@/types'
 
-export type DayStatus = 'full' | 'partial' | 'future' | 'poissa'
-
 interface FirestoreAbsence {
   id: string
   type: 'Loma' | 'Sairas'
@@ -15,7 +13,6 @@ interface FirestoreAbsence {
   to: string
 }
 
-const DAY_SHORTS = ['Ma', 'Ti', 'Ke', 'To', 'Pe', 'La', 'Su']
 const DAY_KEYS: DayKey[] = ['ma', 'ti', 'ke', 'to', 'pe', 'la', 'su']
 const DAY_NAMES: Record<DayKey, string> = {
   ma: 'Maanantai', ti: 'Tiistai', ke: 'Keskiviikko',
@@ -66,27 +63,17 @@ function formatAbsenceRange(from: string, to: string): string {
   return from === to ? toFull : `${fmt(from)}–${toFull}`
 }
 
-const STATUS_META: Record<DayStatus, { tag: string; label: string }> = {
-  full:    { tag: 'tag-accent',  label: 'Valmis' },
-  partial: { tag: 'tag-outline', label: 'Kesken' },
-  future:  { tag: 'tag-neutral', label: '–' },
-  poissa:  { tag: 'tag-neutral', label: 'Poissa' },
-}
-
 interface Props {
-  initialChild?: string
   chores: Chore[]
   familyId: string
   firestoreMembers: Member[]
 }
 
-export function ProfileView({ initialChild, chores, familyId, firestoreMembers }: Props) {
+export function ProfileView({ chores, familyId, firestoreMembers }: Props) {
   const childMembers = firestoreMembers.filter(m => m.role === 'child')
 
   const [selectedUid, setSelectedUid] = useState(
-    () => (initialChild && childMembers.some(m => m.uid === initialChild))
-      ? initialChild
-      : (childMembers[0]?.uid ?? '')
+    () => childMembers[0]?.uid ?? ''
   )
   const [absenceOpen, setAbsenceOpen] = useState(false)
   const [togglePending, setTogglePending] = useState<{ chore: Chore; memberId: string; date: string; instance: TaskInstance | undefined } | null>(null)
@@ -129,18 +116,6 @@ export function ProfileView({ initialChild, chores, familyId, firestoreMembers }
 
   const weekId = getWeekId(weekOffset)
   const weekTaskInstances = allTaskInstances.filter(t => t.memberId === selectedUid && t.isoWeek === weekId)
-
-  const weekGrid: DayStatus[] = getWeekDates(weekOffset).map(date => {
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    const d = new Date(date); d.setHours(0, 0, 0, 0)
-    if (d > today) return 'future'
-    const iso = date.toISOString().slice(0, 10)
-    const dayInstances = weekTaskInstances.filter(t => t.date === iso)
-    if (dayInstances.length === 0) return 'future'
-    const allDone = dayInstances.every(t => t.status === 'tehty' || t.status === 'merkitty')
-    const anyDone = dayInstances.some(t => t.status === 'tehty' || t.status === 'merkitty')
-    return allDone ? 'full' : anyDone ? 'partial' : 'partial'
-  })
 
   const handleToggleStatus = async (chore: Chore, memberId: string, date: string, instance: TaskInstance | undefined) => {
     const instanceId = `${chore.id}_${memberId}_${date}`
@@ -197,17 +172,21 @@ export function ProfileView({ initialChild, chores, familyId, firestoreMembers }
         ))}
       </div>
 
-      {/* 7-päivän minikaavakon */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 'var(--space-4)' }}>
-        {weekGrid.map((status, i) => (
-          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-            <span style={{ fontSize: 10, opacity: 0.55 }}>{DAY_SHORTS[i]}</span>
-            <span className={`tag ${STATUS_META[status].tag}`} style={{ fontSize: 9, padding: '2px 5px' }}>
-              {STATUS_META[status].label}
-            </span>
+      {/* Poissaolot */}
+      <h5 style={{ margin: '0 0 var(--space-2)' }}>Poissaolot</h5>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 'var(--space-2)' }}>
+        {absences.length === 0 ? (
+          <p style={{ fontSize: 12, opacity: 0.5, margin: 0 }}>Ei merkittyjä poissaoloja.</p>
+        ) : absences.map(a => (
+          <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}>
+            <span className="tag tag-neutral">{a.type}</span>
+            <span style={{ opacity: 0.7 }}>{formatAbsenceRange(a.from, a.to)}</span>
           </div>
         ))}
       </div>
+      <button type="button" className="btn btn-secondary btn-block" style={{ marginBottom: 'var(--space-4)' }} onClick={() => setAbsenceOpen(true)}>
+        Merkitse poissaolo
+      </button>
 
       {/* Viikkoaikataulu */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-1)' }}>
@@ -265,24 +244,6 @@ export function ProfileView({ initialChild, chores, familyId, firestoreMembers }
           )
         })
       })()}
-
-      {/* Poissaolot */}
-      <div className="hr" />
-      <h5 style={{ margin: '0 0 var(--space-2)' }}>Poissaolot</h5>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 'var(--space-4)' }}>
-        {absences.length === 0 ? (
-          <p style={{ fontSize: 12, opacity: 0.5, margin: 0 }}>Ei merkittyjä poissaoloja.</p>
-        ) : absences.map(a => (
-          <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}>
-            <span className="tag tag-neutral">{a.type}</span>
-            <span style={{ opacity: 0.7 }}>{formatAbsenceRange(a.from, a.to)}</span>
-          </div>
-        ))}
-      </div>
-
-      <button type="button" className="btn btn-secondary btn-block" onClick={() => setAbsenceOpen(true)}>
-        Merkitse poissaolo
-      </button>
 
       {absenceOpen && (
         <AbsenceDialog

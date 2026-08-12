@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { TriangleAlert, X } from 'lucide-react'
-import { TaskInstance } from '@/types'
+import { Absence, TaskInstance } from '@/types'
 
 interface Props {
   tasks: TaskInstance[]
   onToggle: (id: string) => void
+  absences: Absence[]
+  today: string
 }
 
 function formatPrice(cents: number): string {
@@ -13,7 +15,8 @@ function formatPrice(cents: number): string {
 
 const DAY_NAMES = ['Sunnuntai', 'Maanantai', 'Tiistai', 'Keskiviikko', 'Torstai', 'Perjantai', 'Lauantai']
 
-export function TodayView({ tasks, onToggle }: Props) {
+export function TodayView({ tasks, onToggle, absences, today }: Props) {
+  const isAbsent = absences.some(a => a.from <= today && today <= a.to)
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
   const now = new Date()
@@ -26,6 +29,15 @@ export function TodayView({ tasks, onToggle }: Props) {
   return (
     <div style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
       <p style={{ margin: 0, fontSize: 28, fontFamily: 'var(--font-heading)', fontWeight: 600 }}>Tänään · {dayName} {dateLabel}</p>
+      {isAbsent && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+          border: '1px solid var(--color-divider)', borderRadius: 'var(--radius-md)',
+          padding: 'var(--space-2) var(--space-3)', background: 'var(--color-surface-alt)',
+        }}>
+          <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Sinut on merkitty poissaolevaksi tänään.</span>
+        </div>
+      )}
       {showBanner && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 'var(--space-2)',

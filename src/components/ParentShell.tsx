@@ -28,7 +28,6 @@ type Tab = "chores" | "viikko" | "family" | "lapset" | "maksut";
 export function ParentShell({ familyId, uid, onSignOut }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("chores");
   const [chores, setChores] = useState<Chore[]>([]);
-  const [profileChildId, setProfileChildId] = useState("");
   const [firestoreMembers, setFirestoreMembers] = useState<Member[]>([]);
   const [familyCode, setFamilyCode] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -123,7 +122,6 @@ export function ParentShell({ familyId, uid, onSignOut }: Props) {
         )}
         {activeTab === "lapset" && (
           <ProfileView
-            initialChild={profileChildId}
             chores={chores}
             familyId={familyId}
             firestoreMembers={firestoreMembers}

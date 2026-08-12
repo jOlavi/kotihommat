@@ -6,7 +6,7 @@ import { TodayView } from '@/pages/child/TodayView'
 import { WeekView } from '@/pages/child/WeekView'
 import { BalanceView } from '@/pages/child/BalanceView'
 import { SettingsDialog } from '@/components/SettingsDialog'
-import { TaskInstance } from '@/types'
+import { Absence, TaskInstance } from '@/types'
 
 type Tab = 'today' | 'week' | 'balance'
 
@@ -33,6 +33,7 @@ const TODAY = new Date().toISOString().slice(0, 10)
 export function ChildShell({ familyId, uid, childName, onSignOut }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('today')
   const [taskInstances, setTaskInstances] = useState<TaskInstance[]>([])
+  const [absences, setAbsences] = useState<Absence[]>([])
   const [paidTotal, setPaidTotal] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -43,6 +44,13 @@ export function ChildShell({ familyId, uid, childName, onSignOut }: Props) {
         const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as TaskInstance))
         setTaskInstances(all.filter(t => t.memberId === uid))
       }
+    )
+  }, [familyId, uid])
+
+  useEffect(() => {
+    return onSnapshot(
+      collection(db, `families/${familyId}/members/${uid}/absences`),
+      snap => setAbsences(snap.docs.map(d => ({ id: d.id, ...d.data() } as Absence)))
     )
   }, [familyId, uid])
 
@@ -112,8 +120,8 @@ export function ChildShell({ familyId, uid, childName, onSignOut }: Props) {
       </header>
 
       <main style={{ flex: 1, overflowY: 'auto' }}>
-        {activeTab === 'today' && <TodayView tasks={todayTasks} onToggle={handleToggle} />}
-        {activeTab === 'week' && <WeekView tasks={weekTasks} today={TODAY} />}
+        {activeTab === 'today' && <TodayView tasks={todayTasks} onToggle={handleToggle} absences={absences} today={TODAY} />}
+        {activeTab === 'week' && <WeekView tasks={weekTasks} today={TODAY} absences={absences} />}
         {activeTab === 'balance' && <BalanceView earnedCents={earnedCents} paidCents={paidTotal} />}
       </main>
 

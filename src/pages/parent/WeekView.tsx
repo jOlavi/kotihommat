@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { Chore, Assignment, DayKey, Member, TaskInstance } from '@/types'
+import { Absence, Chore, Assignment, DayKey, Member, TaskInstance } from '@/types'
 
 interface Props {
   chores: Chore[]
@@ -51,6 +51,10 @@ function isToday(date: Date): boolean {
   )
 }
 
+function isAbsent(absences: Absence[], dateISO: string): boolean {
+  return absences.some(a => a.from <= dateISO && dateISO <= a.to)
+}
+
 function getAssigneeUid(assignment: Assignment | undefined, chore: Chore, dayKey: DayKey): string {
   if (chore.type === 'daily') return assignment?.[dayKey] ?? ''
   return assignment?.all ?? ''
@@ -72,6 +76,7 @@ export function WeekView({ chores, familyId, firestoreMembers }: Props) {
   const [overviewWeek, setOverviewWeek] = useState(0)
   const [weekAssignments, setWeekAssignments] = useState<Record<string, Assignment>>({})
   const [taskInstances, setTaskInstances] = useState<TaskInstance[]>([])
+  const [memberAbsences, setMemberAbsences] = useState<Record<string, Absence[]>>({})
 
   useEffect(() => {
     const weekId = getWeekId(overviewWeek)
@@ -91,6 +96,19 @@ export function WeekView({ chores, familyId, firestoreMembers }: Props) {
       snap => setTaskInstances(snap.docs.map(d => ({ id: d.id, ...d.data() } as TaskInstance)))
     )
   }, [familyId])
+
+  useEffect(() => {
+    const unsubs = firestoreMembers.map(m =>
+      onSnapshot(
+        collection(db, `families/${familyId}/members/${m.uid}/absences`),
+        snap => {
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Absence))
+          setMemberAbsences(prev => ({ ...prev, [m.uid]: list }))
+        }
+      )
+    )
+    return () => unsubs.forEach(u => u())
+  }, [familyId, firestoreMembers])
 
   const weekId = getWeekId(overviewWeek)
   const weekDates = getWeekDates(overviewWeek)
@@ -128,44 +146,66 @@ export function WeekView({ chores, familyId, firestoreMembers }: Props) {
       {DAY_KEYS.map((dayKey, i) => {
         const date = weekDates[i]
         const today = isToday(date)
+        const iso = date.toISOString().slice(0, 10)
+
+        const header = (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
+            <h5 style={{ margin: 0, color: today ? 'var(--color-accent-800)' : undefined }}>{DAY_NAMES[dayKey]}</h5>
+            <span style={{ fontSize: 11, opacity: 0.5 }}>
+              {date.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })}
+            </span>
+            {today && <span className="tag tag-accent" style={{ fontSize: 10 }}>Tänään</span>}
+          </div>
+        )
+
+        const rows = (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {plannableChores.length === 0 ? (
+              <p style={{ fontSize: 12, opacity: 0.4, margin: 0 }}>Ei kotitöitä.</p>
+            ) : plannableChores.map(chore => {
+              const assigneeUid = getAssigneeUid(weekAssignments[chore.id], chore, dayKey)
+              if (!assigneeUid) return null
+              const assigneeName = firestoreMembers.find(m => m.uid === assigneeUid)?.firstName ?? '–'
+              const inst = weekTaskInstances.find(t => t.choreId === chore.id && t.memberId === assigneeUid && t.date === iso)
+              const done = inst?.status === 'tehty' || inst?.status === 'merkitty'
+              const absent = isAbsent(memberAbsences[assigneeUid] ?? [], iso)
+              return (
+                <div key={chore.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13, opacity: absent ? 0.5 : 1 }}>
+                  <span style={{ flex: 1 }}>{chore.name}</span>
+                  <span style={{ fontSize: 12, opacity: 0.6 }}>{assigneeName}</span>
+                  <span
+                    className={`tag ${absent ? 'tag-neutral' : done ? 'tag-accent' : 'tag-outline'}`}
+                    style={{ width: 64, fontSize: 11, display: 'flex', justifyContent: 'center' }}
+                  >
+                    {absent ? 'Poissa' : done ? 'Tehty' : 'Kesken'}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )
+
+        if (today) {
+          return (
+            <div key={dayKey} style={{
+              border: '2px solid var(--color-accent)',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--color-accent-100)',
+              padding: 'var(--space-2) 8px',
+              margin: '0 -8px',
+            }}>
+              {header}
+              {rows}
+            </div>
+          )
+        }
 
         return (
           <div key={dayKey}>
             <div className="hr" />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', margin: 'var(--space-2) 0 var(--space-1)' }}>
-              <h5 style={{ margin: 0 }}>{DAY_NAMES[dayKey]}</h5>
-              <span style={{ fontSize: 11, opacity: 0.5 }}>
-                {date.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })}
-              </span>
-              {today && (
-                <span className="tag tag-outline" style={{ fontSize: 10 }}>Tänään</span>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 'var(--space-3)' }}>
-              {plannableChores.length === 0 ? (
-                <p style={{ fontSize: 12, opacity: 0.4, margin: 0 }}>Ei kotitöitä.</p>
-              ) : plannableChores.map(chore => {
-                const assigneeUid = getAssigneeUid(weekAssignments[chore.id], chore, dayKey)
-                if (!assigneeUid) return null
-                const assigneeName = firestoreMembers.find(m => m.uid === assigneeUid)?.firstName ?? '–'
-                const iso = date.toISOString().slice(0, 10)
-                const inst = weekTaskInstances.find(t => t.choreId === chore.id && t.memberId === assigneeUid && t.date === iso)
-                const done = inst?.status === 'tehty' || inst?.status === 'merkitty'
-
-                return (
-                  <div key={chore.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}>
-                    <span style={{ flex: 1 }}>{chore.name}</span>
-                    <span style={{ fontSize: 12, opacity: 0.6 }}>{assigneeName}</span>
-                    <span
-                      className={`tag ${done ? 'tag-accent' : 'tag-outline'}`}
-                      style={{ width: 64, fontSize: 11, display: 'flex', justifyContent: 'center' }}
-                    >
-                      {done ? 'Tehty' : 'Kesken'}
-                    </span>
-                  </div>
-                )
-              })}
+            <div style={{ margin: 'var(--space-2) 0 var(--space-3)' }}>
+              {header}
+              {rows}
             </div>
           </div>
         )
