@@ -53,7 +53,10 @@ export function WeekView({ tasks, today, absences }: Props) {
   const todayRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    todayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const id = setTimeout(() => {
+      todayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 100)
+    return () => clearTimeout(id)
   }, [])
 
   const now = new Date()

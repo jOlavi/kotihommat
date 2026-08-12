@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
-import { collection, doc, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
+import { collection, doc, getDocs, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { ChoreDialog, ChoreFormData } from '@/pages/parent/ChoreDialog'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -133,6 +133,10 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
   const [plannerDraft, setPlannerDraft] = useState<PlannerEntry[]>([])
   const [plannerSaved, setPlannerSaved] = useState(false)
   const [plannerError, setPlannerError] = useState('')
+  const [copyLoading, setCopyLoading] = useState(false)
+  const [copiedFromWeek, setCopiedFromWeek] = useState<number | null>(null)
+  const [confirmCopy, setConfirmCopy] = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingChore, setEditingChore] = useState<Chore | null>(null)
   const [choreError, setChoreError] = useState('')
@@ -289,6 +293,43 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
     }
   }
 
+  const handleCopyPrevWeek = async () => {
+    setCopyLoading(true)
+    setPlannerError('')
+    try {
+      const prevWeekId = getWeekId(weekOffset - 1)
+      const prevWeekNum = getISOWeek((() => { const d = new Date(); d.setDate(d.getDate() + (weekOffset - 1) * 7); return d })())
+      const snap = await getDocs(collection(db, `families/${familyId}/weeklyPlans/${prevWeekId}/assignments`))
+      if (snap.empty) {
+        setPlannerError('Edellisellä viikolla ei ole suunnitelmaa.')
+        return
+      }
+      const loaded: Record<string, Assignment> = {}
+      snap.docs.forEach(d => { loaded[d.id] = d.data() as Assignment })
+      setPlannerDraft(prev => prev.map(e => ({
+        ...e,
+        assignment: loaded[e.choreId] ?? e.assignment,
+      })))
+      const withWeekend = new Set(weekendChores)
+      snap.docs.forEach(d => {
+        const a = d.data() as Assignment
+        if (a.la || a.su) withWeekend.add(d.id)
+      })
+      setWeekendChores(withWeekend)
+      setCopiedFromWeek(prevWeekNum)
+    } catch {
+      setPlannerError('Kopiointi epäonnistui')
+    } finally {
+      setCopyLoading(false)
+    }
+  }
+
+  const handleClear = () => {
+    setPlannerDraft(prev => prev.map(e => ({ ...e, assignment: {} })))
+    setWeekendChores(new Set())
+    setCopiedFromWeek(null)
+  }
+
   const currentWeekNum = getISOWeek((() => { const d = new Date(); d.setDate(d.getDate() + weekOffset * 7); return d })())
 
   return (
@@ -360,9 +401,28 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
               <ChevronRight size={15} />
             </button>
           </div>
-          <p style={{ fontSize: 12, opacity: 0.55, margin: '0 0 var(--space-4)' }}>
+          <p style={{ fontSize: 12, opacity: 0.55, margin: '0 0 var(--space-2)' }}>
             Aseta kuka hoitaa minkäkin kotityön kunakin päivänä.
           </p>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+              disabled={copyLoading}
+              onClick={() => setConfirmCopy(true)}
+            >
+              {copyLoading ? 'Kopioidaan…' : copiedFromWeek ? `Kopioitu vko${copiedFromWeek}` : 'Kopioi ed. viikko'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: 12 }}
+              onClick={() => setConfirmClear(true)}
+            >
+              Tyhjennä
+            </button>
+          </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             {chores.filter(c => c.type !== 'once' && c.active !== false).map(c => {
@@ -455,6 +515,26 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
           confirmLabel="Poista"
           onConfirm={() => { handleDelete(deletePending.id); setDeletePending(null) }}
           onClose={() => setDeletePending(null)}
+        />
+      )}
+
+      {confirmCopy && (
+        <ConfirmDialog
+          title="Kopioi edellinen viikko"
+          message="Edellisen viikon suunnitelma kopioidaan tälle viikolle. Nykyiset valinnat ylikirjoitetaan."
+          confirmLabel="Kopioi"
+          onConfirm={() => { setConfirmCopy(false); handleCopyPrevWeek() }}
+          onClose={() => setConfirmCopy(false)}
+        />
+      )}
+
+      {confirmClear && (
+        <ConfirmDialog
+          title="Tyhjennä suunnitelma"
+          message="Kaikki tämän viikon valinnat poistetaan. Muutos astuu voimaan vasta tallennuksen jälkeen."
+          confirmLabel="Tyhjennä"
+          onConfirm={() => { handleClear(); setConfirmClear(false) }}
+          onClose={() => setConfirmClear(false)}
         />
       )}
     </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -73,10 +73,18 @@ function getWeekId(offset: number): string {
 
 
 export function WeekView({ chores, familyId, firestoreMembers }: Props) {
+  const todayRef = useRef<HTMLDivElement>(null)
   const [overviewWeek, setOverviewWeek] = useState(0)
   const [weekAssignments, setWeekAssignments] = useState<Record<string, Assignment>>({})
   const [taskInstances, setTaskInstances] = useState<TaskInstance[]>([])
   const [memberAbsences, setMemberAbsences] = useState<Record<string, Absence[]>>({})
+
+  useEffect(() => {
+    const id = setTimeout(() => {
+      todayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 100)
+    return () => clearTimeout(id)
+  }, [])
 
   useEffect(() => {
     const weekId = getWeekId(overviewWeek)
@@ -187,7 +195,7 @@ export function WeekView({ chores, familyId, firestoreMembers }: Props) {
 
         if (today) {
           return (
-            <div key={dayKey} style={{
+            <div ref={todayRef} key={dayKey} style={{
               border: '2px solid var(--color-accent)',
               borderRadius: 'var(--radius-md)',
               background: 'var(--color-accent-100)',
