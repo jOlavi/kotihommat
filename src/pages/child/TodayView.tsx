@@ -11,14 +11,21 @@ function formatPrice(cents: number): string {
   return (cents / 100).toLocaleString('fi-FI', { minimumFractionDigits: 2 })
 }
 
+const DAY_NAMES = ['Sunnuntai', 'Maanantai', 'Tiistai', 'Keskiviikko', 'Torstai', 'Perjantai', 'Lauantai']
+
 export function TodayView({ tasks, onToggle }: Props) {
   const [bannerDismissed, setBannerDismissed] = useState(false)
+
+  const now = new Date()
+  const dayName = DAY_NAMES[now.getDay()]
+  const dateLabel = now.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })
 
   const undoneCount = tasks.filter(t => (t.status ?? 'tekematon') === 'tekematon').length
   const showBanner = !bannerDismissed && undoneCount > 0
 
   return (
     <div style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+      <p style={{ margin: 0, fontSize: 28, fontFamily: 'var(--font-heading)', fontWeight: 600 }}>Tänään · {dayName} {dateLabel}</p>
       {showBanner && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
@@ -43,8 +50,8 @@ export function TodayView({ tasks, onToggle }: Props) {
         <p style={{ fontSize: 13, opacity: 0.5, margin: 0 }}>Ei tehtäviä tänään.</p>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {tasks.map((task, i) => {
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+        {tasks.map((task) => {
           const status = task.status ?? 'tekematon'
           const done = status === 'tehty' || status === 'merkitty'
           const locked = status === 'merkitty'
@@ -53,8 +60,9 @@ export function TodayView({ tasks, onToggle }: Props) {
               key={task.id}
               style={{
                 display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
-                padding: 'var(--space-3) 0',
-                borderBottom: i < tasks.length - 1 ? '1px solid var(--color-divider)' : 'none',
+                padding: 'var(--space-3)',
+                border: '1px solid var(--color-divider)',
+                borderRadius: 'var(--radius-md)',
               }}
             >
               <input
@@ -70,9 +78,11 @@ export function TodayView({ tasks, onToggle }: Props) {
               <span style={{ flex: 1, fontSize: 15, textDecoration: done ? 'line-through' : 'none', opacity: done ? 0.5 : 1 }}>
                 {task.choreName}
               </span>
-              <span style={{ fontSize: 14, color: 'var(--color-accent-700)' }}>
-                {formatPrice(task.priceCents)} €
-              </span>
+              {task.priceCents > 0 && (
+                <span style={{ fontSize: 14, color: 'var(--color-accent-700)' }}>
+                  {formatPrice(task.priceCents)} €
+                </span>
+              )}
             </div>
           )
         })}

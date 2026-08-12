@@ -32,8 +32,8 @@ export function PayDialog({ childName, maxCents, onSave, onClose }: Props) {
             id="pay-amount"
             name="amount"
             type="number"
-            step="0.5"
-            min="0.5"
+            step="any"
+            min="0.2"
             max={maxCents / 100}
             defaultValue={maxCents / 100}
             required

@@ -7,28 +7,37 @@ import {
   Wallet,
   Settings,
 } from "lucide-react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { FamilyView } from "@/pages/parent/FamilyView";
 import { ChoresView } from "@/pages/parent/ChoresView";
 import { WeekView } from "@/pages/parent/WeekView";
 import { ProfileView } from "@/pages/parent/ProfileView";
 import { PayView } from "@/pages/parent/PayView";
+import { SettingsDialog } from "@/components/SettingsDialog";
 import { Chore, Member } from "@/types"
 
 interface Props {
   familyId: string
-  creatorName: string
+  uid: string
   onSignOut: () => void
 }
 
 type Tab = "chores" | "viikko" | "family" | "lapset" | "maksut";
 
-export function ParentShell({ familyId, creatorName, onSignOut }: Props) {
+export function ParentShell({ familyId, uid, onSignOut }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("chores");
   const [chores, setChores] = useState<Chore[]>([]);
   const [profileChildId, setProfileChildId] = useState("");
   const [firestoreMembers, setFirestoreMembers] = useState<Member[]>([]);
+  const [familyCode, setFamilyCode] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    return onSnapshot(doc(db, `families/${familyId}`), snap => {
+      setFamilyCode(snap.data()?.familyCode ?? '')
+    })
+  }, [familyId])
 
   useEffect(() => {
     return onSnapshot(collection(db, `families/${familyId}/chores`), snap => {
@@ -46,9 +55,9 @@ export function ParentShell({ familyId, creatorName, onSignOut }: Props) {
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "chores", label: "Kotityöt", icon: <ListChecks size={20} /> },
     { id: "viikko", label: "Viikko", icon: <Calendar size={20} /> },
-    { id: "family", label: "Perhe", icon: <Users size={20} /> },
     { id: "lapset", label: "Lapset", icon: <UserCircle size={20} /> },
     { id: "maksut", label: "Maksut", icon: <Wallet size={20} /> },
+    { id: "family", label: "Perhe", icon: <Users size={20} /> },
   ];
 
   return (
@@ -61,20 +70,16 @@ export function ParentShell({ familyId, creatorName, onSignOut }: Props) {
           position: "relative",
         }}
       >
-        <button
-          type="button"
+        <span
           className="tag tag-accent"
           style={{
-            border: "none",
-            cursor: "pointer",
             fontFamily: "var(--font-heading)",
             fontWeight: 600,
             fontSize: 15,
           }}
-          onClick={onSignOut}
         >
-          {creatorName}
-        </button>
+          {firestoreMembers.find(m => m.uid === uid)?.firstName ?? '…'}
+        </span>
         <span style={{
           fontFamily: '"Bodoni Moda", var(--font-heading)',
           fontWeight: 600,
@@ -89,6 +94,7 @@ export function ParentShell({ familyId, creatorName, onSignOut }: Props) {
           className="btn btn-ghost btn-icon"
           aria-label="Asetukset"
           style={{ marginLeft: "auto" }}
+          onClick={() => setSettingsOpen(true)}
         >
           <Settings size={18} />
         </button>
@@ -106,15 +112,12 @@ export function ParentShell({ familyId, creatorName, onSignOut }: Props) {
             chores={chores}
             familyId={familyId}
             firestoreMembers={firestoreMembers}
-            onChildClick={(uid) => {
-              setProfileChildId(uid);
-              setActiveTab("lapset");
-            }}
           />
         )}
         {activeTab === "family" && (
           <FamilyView
             familyId={familyId}
+            familyCode={familyCode}
             members={firestoreMembers}
           />
         )}
@@ -169,6 +172,13 @@ export function ParentShell({ familyId, creatorName, onSignOut }: Props) {
           </button>
         ))}
       </nav>
+
+      {settingsOpen && (
+        <SettingsDialog
+          onSignOut={onSignOut}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 }

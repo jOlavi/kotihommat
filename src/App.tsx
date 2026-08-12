@@ -88,7 +88,7 @@ export default function App() {
     return wrapper(
       <ParentShell
         familyId={familyId}
-        creatorName={user?.displayName ?? 'Vanhempi'}
+        uid={user!.uid}
         onSignOut={() => signOut(auth)}
       />
     )

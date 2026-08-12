@@ -136,7 +136,7 @@ export function OnboardingView({ user: _user, onComplete }: Props) {
             </span>
             <div style={{ marginTop: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--color-accent-100)', borderRadius: 'var(--radius-md)' }}>
               <p style={{ fontSize: 11, opacity: 0.7, margin: '0 0 4px' }}>Perheen kirjautumiskoodi</p>
-              <p style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 22, margin: 0, color: 'var(--color-accent-800)', letterSpacing: '0.1em' }}>
+              <p style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 22, margin: 0, color: 'var(--color-accent-800)', letterSpacing: '0.1em', fontVariantNumeric: 'lining-nums' }}>
                 {familyCode}
               </p>
               <p style={{ fontSize: 11, opacity: 0.6, margin: '4px 0 0' }}>Tallennettu. Löydät sen myöhemmin Lapset-välilehdeltä.</p>
@@ -152,7 +152,7 @@ export function OnboardingView({ user: _user, onComplete }: Props) {
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14 }}>{c.firstName}</div>
-                    <div style={{ fontSize: 11, opacity: 0.55 }}>{displayUsername(c.username)}</div>
+                    <div style={{ fontSize: 11, opacity: 0.55, fontVariantNumeric: 'lining-nums' }}>{displayUsername(c.username)}</div>
                   </div>
                   <span className="tag tag-accent">Lapsi</span>
                 </div>

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Chore, ChoreType, Member } from '@/types'
 
 export interface ChoreFormData {
@@ -21,16 +22,18 @@ interface Props {
 }
 
 export function ChoreDialog({ chore, firestoreMembers, onSave, onClose }: Props) {
+  const [assignedIds, setAssignedIds] = useState<string[]>(chore?.assignedMemberIds ?? [])
+
+  const toggleMember = (uid: string) =>
+    setAssignedIds(prev => prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid])
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const form = e.currentTarget
     const name = (form.elements.namedItem('name') as HTMLInputElement).value.trim()
     const price = parseFloat((form.elements.namedItem('price') as HTMLInputElement).value)
     const type = (form.elements.namedItem('type') as RadioNodeList).value as ChoreType
-    const assignedMemberIds = Array.from(
-      form.querySelectorAll<HTMLInputElement>('input[name="assign"]:checked')
-    ).map(el => el.value)
-    onSave({ name, priceCents: Math.round(price * 100), type, assignedMemberIds })
+    onSave({ name, priceCents: Math.round(price * 100), type, assignedMemberIds: assignedIds })
   }
 
   return (
@@ -59,10 +62,9 @@ export function ChoreDialog({ chore, firestoreMembers, onSave, onClose }: Props)
             id="chore-price"
             name="price"
             type="number"
-            step="0.5"
-            min="0.5"
-            required
-            defaultValue={chore ? chore.priceCents / 100 : ''}
+            step="any"
+            min="0"
+            defaultValue={chore ? chore.priceCents / 100 : 0}
           />
         </div>
 
@@ -85,15 +87,30 @@ export function ChoreDialog({ chore, firestoreMembers, onSave, onClose }: Props)
 
         {firestoreMembers.length > 0 && (
           <div className="field">
-            <label>Kohdista lapselle</label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-1)' }}>
+              <label style={{ margin: 0 }}>Kohdista jäsenelle</label>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ fontSize: 12, padding: '2px 6px', height: 'auto' }}
+                onClick={() =>
+                  setAssignedIds(
+                    assignedIds.length === firestoreMembers.length
+                      ? []
+                      : firestoreMembers.map(m => m.uid)
+                  )
+                }
+              >
+                {assignedIds.length === firestoreMembers.length ? 'Poista kaikki' : 'Kohdista kaikille'}
+              </button>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
               {firestoreMembers.map(m => (
                 <label key={m.uid} className="radio">
                   <input
                     type="checkbox"
-                    name="assign"
-                    value={m.uid}
-                    defaultChecked={chore?.assignedMemberIds.includes(m.uid) ?? false}
+                    checked={assignedIds.includes(m.uid)}
+                    onChange={() => toggleMember(m.uid)}
                   />
                   <span className="dot" />
                   {m.firstName}

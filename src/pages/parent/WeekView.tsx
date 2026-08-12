@@ -8,7 +8,6 @@ interface Props {
   chores: Chore[]
   familyId: string
   firestoreMembers: Member[]
-  onChildClick: (uid: string) => void
 }
 
 const DAY_KEYS: DayKey[] = ['ma', 'ti', 'ke', 'to', 'pe', 'la', 'su']
@@ -52,60 +51,9 @@ function isToday(date: Date): boolean {
   )
 }
 
-function formatPrice(cents: number): string {
-  return (cents / 100).toLocaleString('fi-FI', { minimumFractionDigits: 2 })
-}
-
 function getAssigneeUid(assignment: Assignment | undefined, chore: Chore, dayKey: DayKey): string {
   if (chore.type === 'daily') return assignment?.[dayKey] ?? ''
   return assignment?.all ?? ''
-}
-
-interface ChildSummary {
-  uid: string
-  firstName: string
-  doneCount: number
-  totalCount: number
-  earnedCents: number
-}
-
-function buildChildSummaries(
-  childMembers: Member[],
-  chores: Chore[],
-  weekAssignments: Record<string, Assignment>,
-  weekDates: Date[],
-  taskInstances: TaskInstance[],
-  weekId: string,
-): ChildSummary[] {
-  return childMembers.map(member => {
-    let doneCount = 0
-    let totalCount = 0
-    let earnedCents = 0
-
-    chores.filter(c => c.type !== 'once').forEach(chore => {
-      const assignment = weekAssignments[chore.id]
-      if (chore.type === 'daily') {
-        DAY_KEYS.forEach((dayKey, i) => {
-          if (getAssigneeUid(assignment, chore, dayKey) !== member.uid) return
-          totalCount++
-          const iso = weekDates[i].toISOString().slice(0, 10)
-          const inst = taskInstances.find(t => t.choreId === chore.id && t.memberId === member.uid && t.date === iso)
-          if (inst?.status === 'tehty' || inst?.status === 'merkitty') {
-            doneCount++; earnedCents += chore.priceCents
-          }
-        })
-      } else {
-        if (assignment?.all !== member.uid) return
-        totalCount++
-        const inst = taskInstances.find(t => t.choreId === chore.id && t.memberId === member.uid && t.isoWeek === weekId)
-        if (inst?.status === 'tehty' || inst?.status === 'merkitty') {
-          doneCount++; earnedCents += chore.priceCents
-        }
-      }
-    })
-
-    return { uid: member.uid, firstName: member.firstName, doneCount, totalCount, earnedCents }
-  })
 }
 
 function getWeekId(offset: number): string {
@@ -119,7 +67,8 @@ function getWeekId(offset: number): string {
   return `${d.getFullYear()}-W${String(week).padStart(2, '0')}`
 }
 
-export function WeekView({ chores, familyId, firestoreMembers, onChildClick }: Props) {
+
+export function WeekView({ chores, familyId, firestoreMembers }: Props) {
   const [overviewWeek, setOverviewWeek] = useState(0)
   const [weekAssignments, setWeekAssignments] = useState<Record<string, Assignment>>({})
   const [taskInstances, setTaskInstances] = useState<TaskInstance[]>([])
@@ -145,10 +94,8 @@ export function WeekView({ chores, familyId, firestoreMembers, onChildClick }: P
 
   const weekId = getWeekId(overviewWeek)
   const weekDates = getWeekDates(overviewWeek)
-  const childMembers = firestoreMembers.filter(m => m.role === 'child')
   const plannableChores = chores.filter(c => c.type !== 'once')
   const weekTaskInstances = taskInstances.filter(t => t.isoWeek === weekId)
-  const childSummaries = buildChildSummaries(childMembers, chores, weekAssignments, weekDates, weekTaskInstances, weekId)
 
   return (
     <div style={{ padding: 'var(--space-4)' }}>
@@ -224,44 +171,6 @@ export function WeekView({ chores, familyId, firestoreMembers, onChildClick }: P
         )
       })}
 
-      {childMembers.length > 0 && (
-        <>
-          <h5 style={{ margin: 'var(--space-4) 0 var(--space-2)' }}>Lapset tällä viikolla</h5>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-            {childSummaries.map(({ uid, firstName, doneCount, totalCount, earnedCents }) => (
-              <button
-                key={uid}
-                type="button"
-                className="card"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
-                  width: '100%', textAlign: 'left', cursor: 'pointer',
-                  background: 'none', border: 'none', padding: 'var(--space-3)',
-                }}
-                onClick={() => onChildClick(uid)}
-              >
-                <div style={{
-                  width: 34, height: 34, borderRadius: '50%',
-                  background: 'var(--color-accent-100)', color: 'var(--color-accent-700)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 15, flexShrink: 0,
-                }}>
-                  {firstName[0]?.toUpperCase()}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 14 }}>
-                    {firstName}
-                  </div>
-                  <div style={{ fontSize: 11.5, opacity: 0.6 }}>
-                    {doneCount}/{totalCount} tehty · Ansaittu {formatPrice(earnedCents)} €
-                  </div>
-                </div>
-                <ChevronRight size={16} style={{ opacity: 0.4, flexShrink: 0 }} />
-              </button>
-            ))}
-          </div>
-        </>
-      )}
 
     </div>
   )

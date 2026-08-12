@@ -208,6 +208,8 @@ textarea.input { min-height: 90px; resize: vertical; }
 .tag-accent-2 { background: var(--color-accent-2-100); color: var(--color-accent-2-800); }
 .tag-neutral { background: var(--color-neutral-100); color: var(--color-neutral-800); }
 .tag-outline { border: 1px solid var(--color-accent); color: var(--color-accent); }
+button.tag { cursor: pointer; font: inherit; appearance: none; -webkit-appearance: none; border: none; }
+button.tag-outline { border: 1px solid var(--color-accent); }
 
 /* — navigation — */
 .nav {

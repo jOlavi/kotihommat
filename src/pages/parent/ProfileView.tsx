@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { collection, doc, onSnapshot, updateDoc, addDoc } from 'firebase/firestore'
+import { collection, doc, onSnapshot, updateDoc, addDoc, setDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { updateChildAuthPin } from '@/lib/childAuth'
 import { AbsenceDialog } from '@/pages/parent/AbsenceDialog'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Chore, Assignment, DayKey, Member, TaskInstance } from '@/types'
 
 export type DayStatus = 'full' | 'partial' | 'future' | 'poissa'
@@ -89,11 +89,8 @@ export function ProfileView({ initialChild, chores, familyId, firestoreMembers }
       : (childMembers[0]?.uid ?? '')
   )
   const [absenceOpen, setAbsenceOpen] = useState(false)
+  const [togglePending, setTogglePending] = useState<{ chore: Chore; memberId: string; date: string; instance: TaskInstance | undefined } | null>(null)
   const [weekOffset, setWeekOffset] = useState(0)
-  const [pinEditing, setPinEditing] = useState(false)
-  const [newPin, setNewPin] = useState('')
-  const [pinLoading, setPinLoading] = useState(false)
-  const [pinError, setPinError] = useState('')
   const [weekAssignments, setWeekAssignments] = useState<Record<string, Assignment>>({})
   const [allTaskInstances, setAllTaskInstances] = useState<TaskInstance[]>([])
   const [absences, setAbsences] = useState<FirestoreAbsence[]>([])
@@ -129,9 +126,6 @@ export function ProfileView({ initialChild, chores, familyId, firestoreMembers }
     )
   }, [familyId, selectedUid])
 
-  useEffect(() => {
-    setPinEditing(false); setNewPin(''); setPinError('')
-  }, [selectedUid])
 
   const weekId = getWeekId(weekOffset)
   const weekTaskInstances = allTaskInstances.filter(t => t.memberId === selectedUid && t.isoWeek === weekId)
@@ -147,6 +141,29 @@ export function ProfileView({ initialChild, chores, familyId, firestoreMembers }
     const anyDone = dayInstances.some(t => t.status === 'tehty' || t.status === 'merkitty')
     return allDone ? 'full' : anyDone ? 'partial' : 'partial'
   })
+
+  const handleToggleStatus = async (chore: Chore, memberId: string, date: string, instance: TaskInstance | undefined) => {
+    const instanceId = `${chore.id}_${memberId}_${date}`
+    const ref = doc(db, `families/${familyId}/taskInstances/${instanceId}`)
+    if (!instance) {
+      await setDoc(ref, {
+        choreId: chore.id,
+        choreName: chore.name,
+        memberId,
+        date,
+        isoWeek: weekId,
+        priceCents: chore.priceCents,
+        status: 'tehty',
+        completedAt: new Date().toISOString(),
+      })
+    } else {
+      const newStatus = instance.status === 'tehty' || instance.status === 'merkitty' ? 'tekematon' : 'tehty'
+      await updateDoc(ref, {
+        status: newStatus,
+        completedAt: newStatus === 'tehty' ? new Date().toISOString() : null,
+      })
+    }
+  }
 
   const handleAbsenceSave = async (type: 'Loma' | 'Sairas', from: string, to: string) => {
     if (!selectedUid) return
@@ -179,63 +196,6 @@ export function ProfileView({ initialChild, chores, familyId, firestoreMembers }
           </label>
         ))}
       </div>
-
-      {/* Kirjautumistiedot */}
-      {(() => {
-        const member = firestoreMembers.find(m => m.uid === selectedUid)
-        if (!member) return null
-        const displayUsername = member.username
-          ? (() => { const [n, c] = member.username!.split('.'); return `${n}.${(c ?? '').toUpperCase()}` })()
-          : '–'
-
-        const handleSavePin = async () => {
-          if (!/^\d{4}$/.test(newPin)) { setPinError('PIN tulee olla 4 numeroa'); return }
-          if (!member.username || !member.pin) { setPinError('Käyttäjätiedot puuttuvat'); return }
-          setPinLoading(true); setPinError('')
-          try {
-            await updateChildAuthPin(member.username, member.pin, newPin)
-            await updateDoc(doc(db, `families/${familyId}/members/${member.uid}`), { pin: newPin })
-            setPinEditing(false); setNewPin('')
-          } catch { setPinError('PIN:n vaihto epäonnistui') }
-          finally { setPinLoading(false) }
-        }
-
-        return (
-          <div className="card" style={{ marginBottom: 'var(--space-4)', gap: 'var(--space-2)' }}>
-            <div className="card-kicker">Kirjautumistiedot</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}>
-                <span style={{ opacity: 0.6, width: 80 }}>Tunnus</span>
-                <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600 }}>{displayUsername}</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}>
-                <span style={{ opacity: 0.6, width: 80 }}>PIN</span>
-                {pinEditing ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                    <input className="input" type="password" inputMode="numeric" maxLength={4}
-                      placeholder="1234" value={newPin}
-                      onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                      style={{ width: 80, padding: '2px 8px', fontSize: 13 }} autoFocus />
-                    <button type="button" className="btn btn-primary" style={{ padding: '2px 10px', fontSize: 12 }}
-                      onClick={handleSavePin} disabled={pinLoading || newPin.length !== 4}>Tallenna</button>
-                    <button type="button" className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: 12 }}
-                      onClick={() => { setPinEditing(false); setNewPin(''); setPinError('') }}>Peruuta</button>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                    <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, letterSpacing: '0.1em' }}>
-                      {member.pin ?? '••••'}
-                    </span>
-                    <button type="button" className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: 12 }}
-                      onClick={() => setPinEditing(true)}>Vaihda</button>
-                  </div>
-                )}
-              </div>
-              {pinError && <p style={{ fontSize: 12, color: 'oklch(50% 0.18 25)', margin: 0 }}>{pinError}</p>}
-            </div>
-          </div>
-        )
-      })()}
 
       {/* 7-päivän minikaavakon */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 'var(--space-4)' }}>
@@ -289,10 +249,14 @@ export function ProfileView({ initialChild, chores, familyId, firestoreMembers }
                     <div key={chore.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}>
                       <span style={{ flex: 1 }}>{chore.name}</span>
                       <span style={{ fontSize: 12, opacity: 0.55 }}>{formatPrice(chore.priceCents)} €</span>
-                      <span className={`tag ${done ? 'tag-accent' : 'tag-outline'}`}
-                        style={{ width: 64, fontSize: 11, display: 'flex', justifyContent: 'center' }}>
+                      <button
+                        type="button"
+                        className={`tag ${done ? 'tag-accent' : 'tag-outline'}`}
+                        style={{ width: 64, fontSize: 11, justifyContent: 'center' }}
+                        onClick={() => setTogglePending({ chore, memberId: selectedUid, date: iso, instance })}
+                      >
                         {done ? 'Tehty' : 'Kesken'}
-                      </span>
+                      </button>
                     </div>
                   )
                 })}
@@ -327,6 +291,28 @@ export function ProfileView({ initialChild, chores, familyId, firestoreMembers }
           onClose={() => setAbsenceOpen(false)}
         />
       )}
+
+      {togglePending && (() => {
+        const { chore, memberId, date, instance } = togglePending
+        const currentlyDone = instance?.status === 'tehty' || instance?.status === 'merkitty'
+        const childName = selectedMember?.firstName ?? ''
+        return (
+          <ConfirmDialog
+            title={currentlyDone ? 'Merkitse tekemättömäksi' : 'Merkitse tehdyksi'}
+            message={
+              currentlyDone
+                ? `Merkitäänkö "${chore.name}" tekemättömäksi ${childName}:lle?`
+                : `Merkitäänkö "${chore.name}" tehdyksi ${childName}:lle?`
+            }
+            confirmLabel={currentlyDone ? 'Merkitse kesken' : 'Merkitse tehty'}
+            onConfirm={() => {
+              handleToggleStatus(chore, memberId, date, instance)
+              setTogglePending(null)
+            }}
+            onClose={() => setTogglePending(null)}
+          />
+        )
+      })()}
     </div>
   )
 }

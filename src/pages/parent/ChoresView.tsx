@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
-import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore'
+import { collection, doc, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { ChoreDialog, ChoreFormData } from '@/pages/parent/ChoreDialog'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Chore, Assignment, DayKey, Member } from '@/types'
 
 const DAY_KEYS: DayKey[] = ['ma', 'ti', 'ke', 'to', 'pe', 'la', 'su']
@@ -56,6 +57,73 @@ function formatPrice(cents: number): string {
   return (cents / 100).toLocaleString('fi-FI', { minimumFractionDigits: 2 })
 }
 
+function shortName(name: string): string {
+  return name.length > 5 ? name.slice(0, 5) + '…' : name
+}
+
+function DaySelect({ value, members, onChange }: {
+  value: string
+  members: Member[]
+  onChange: (uid: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const selected = members.find(m => m.uid === value)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  return (
+    <div ref={ref} style={{ position: 'relative', width: '100%' }}>
+      <button
+        type="button"
+        className="input"
+        onClick={() => setOpen(o => !o)}
+        style={{ padding: '6px 4px', fontSize: '13px', minHeight: 'auto', textAlign: 'center', width: '100%', cursor: 'pointer' }}
+      >
+        {selected ? shortName(selected.firstName) : '–'}
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+          zIndex: 50, background: 'var(--color-surface)', border: '1px solid var(--color-divider)',
+          borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)',
+          minWidth: 80, marginTop: 2,
+        }}>
+          <button
+            type="button"
+            onClick={() => { onChange(''); setOpen(false) }}
+            style={{ display: 'block', width: '100%', padding: '6px 10px', fontSize: 13, textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            –
+          </button>
+          {members.map(m => (
+            <button
+              key={m.uid}
+              type="button"
+              onClick={() => { onChange(m.uid); setOpen(false) }}
+              style={{
+                display: 'block', width: '100%', padding: '6px 10px', fontSize: 13, textAlign: 'left',
+                background: m.uid === value ? 'var(--color-accent-100)' : 'none',
+                border: 'none', cursor: 'pointer',
+                color: m.uid === value ? 'var(--color-accent-800)' : 'inherit',
+              }}
+            >
+              {m.firstName}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function ChoresView({ familyId, firestoreMembers }: Props) {
   const [view, setView] = useState<'lista' | 'suunnittelu'>('lista')
   const [weekOffset, setWeekOffset] = useState(0)
@@ -68,6 +136,8 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingChore, setEditingChore] = useState<Chore | null>(null)
   const [choreError, setChoreError] = useState('')
+  const [deletePending, setDeletePending] = useState<Chore | null>(null)
+  const [weekendChores, setWeekendChores] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     return onSnapshot(collection(db, `families/${familyId}/chores`), snap => {
@@ -89,6 +159,12 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
   }, [familyId, weekOffset])
 
   useEffect(() => {
+    const withWeekend = new Set<string>()
+    chores.forEach(c => {
+      const a = savedAssignments[c.id]
+      if (a && (a.la || a.su)) withWeekend.add(c.id)
+    })
+    setWeekendChores(withWeekend)
     setPlannerDraft(
       chores.filter(c => c.type !== 'once').map(c => ({
         choreId: c.id,
@@ -97,7 +173,7 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
     )
   }, [chores, savedAssignments])
 
-  const childMembers = firestoreMembers.filter(m => m.role === 'child')
+  const childMembers = firestoreMembers
   const memberName = (uid: string) => firestoreMembers.find(m => m.uid === uid)?.firstName ?? '–'
 
   const handleSave = async (data: ChoreFormData) => {
@@ -130,7 +206,7 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
   const handleDelete = async (id: string) => {
     setChoreError('')
     try {
-      await deleteDoc(doc(db, `families/${familyId}/chores/${id}`))
+      await updateDoc(doc(db, `families/${familyId}/chores/${id}`), { active: false })
     } catch {
       setChoreError('Poisto epäonnistui')
     }
@@ -148,6 +224,21 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
     setPlannerDraft(prev => prev.map(e =>
       e.choreId === choreId ? { ...e, assignment: { ...e.assignment, all: uid } } : e
     ))
+
+  const toggleWeekend = (choreId: string, include: boolean) => {
+    setWeekendChores(prev => {
+      const next = new Set(prev)
+      include ? next.add(choreId) : next.delete(choreId)
+      return next
+    })
+    if (!include) {
+      setPlannerDraft(prev => prev.map(e =>
+        e.choreId === choreId
+          ? { ...e, assignment: { ...e.assignment, la: '', su: '' } }
+          : e
+      ))
+    }
+  }
 
   const handleSavePlan = async () => {
     setPlannerError('')
@@ -226,7 +317,7 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           {choresLoading ? (
             <p style={{ fontSize: 12, opacity: 0.5 }}>Ladataan...</p>
-          ) : chores.map(c => (
+          ) : chores.filter(c => c.active !== false).map(c => (
             <div key={c.id} className="card">
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-2)' }}>
                 <div style={{ flex: 1 }}>
@@ -248,7 +339,7 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
                 <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => openEdit(c)}>
                   <Pencil size={13} /> Muokkaa
                 </button>
-                <button type="button" className="btn btn-secondary" style={{ flex: 1, color: 'var(--color-accent-800)' }} onClick={() => handleDelete(c.id)}>
+                <button type="button" className="btn btn-secondary" style={{ flex: 1, color: 'var(--color-accent-800)' }} onClick={() => setDeletePending(c)}>
                   <Trash2 size={13} /> Poista
                 </button>
               </div>
@@ -274,8 +365,9 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            {chores.filter(c => c.type !== 'once').map(c => {
+            {chores.filter(c => c.type !== 'once' && c.active !== false).map(c => {
               const entry = plannerDraft.find(e => e.choreId === c.id)
+              const choreMembers = firestoreMembers.filter(m => c.assignedMemberIds.includes(m.uid))
               return (
                 <div key={c.id} className="card">
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
@@ -285,24 +377,36 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
                     </span>
                   </div>
 
-                  {c.type === 'daily' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
-                      {DAY_KEYS.map(day => (
-                        <div key={day} style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
-                          <span style={{ fontSize: '9.5px', opacity: 0.55 }}>{DAY_SHORTS[day]}</span>
-                          <select
-                            className="input"
-                            style={{ padding: '3px 2px', fontSize: '10.5px', minHeight: 'auto', textAlign: 'center' }}
-                            value={entry?.assignment[day] ?? ''}
-                            onChange={e => updateDay(c.id, day, e.target.value)}
-                          >
-                            <option value="">–</option>
-                            {childMembers.map(m => <option key={m.uid} value={m.uid}>{m.firstName}</option>)}
-                          </select>
+                  {c.type === 'daily' && (() => {
+                    const showWeekend = weekendChores.has(c.id)
+                    const visibleDays = showWeekend ? DAY_KEYS : DAY_KEYS.slice(0, 5)
+                    const cols = visibleDays.length
+                    return (
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 4, marginBottom: 'var(--space-2)' }}>
+                          {visibleDays.map(day => (
+                            <div key={day} style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+                              <span style={{ fontSize: '9.5px', opacity: 0.55 }}>{DAY_SHORTS[day]}</span>
+                              <DaySelect
+                                value={entry?.assignment[day] ?? ''}
+                                members={choreMembers}
+                                onChange={uid => updateDay(c.id, day, uid)}
+                              />
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', fontSize: 11, opacity: 0.6, cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={showWeekend}
+                            onChange={e => toggleWeekend(c.id, e.target.checked)}
+                            style={{ accentColor: 'var(--color-accent)', cursor: 'pointer' }}
+                          />
+                          Sisällytä viikonloppu
+                        </label>
+                      </>
+                    )
+                  })()}
 
                   {c.type === 'weekly' && (
                     <div className="field" style={{ margin: 0 }}>
@@ -313,7 +417,7 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
                         onChange={e => updateAll(c.id, e.target.value)}
                       >
                         <option value="">–</option>
-                        {childMembers.map(m => <option key={m.uid} value={m.uid}>{m.firstName}</option>)}
+                        {choreMembers.map(m => <option key={m.uid} value={m.uid}>{m.firstName}</option>)}
                       </select>
                     </div>
                   )}
@@ -341,6 +445,16 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
           firestoreMembers={childMembers}
           onSave={handleSave}
           onClose={() => { setDialogOpen(false); setEditingChore(null) }}
+        />
+      )}
+
+      {deletePending && (
+        <ConfirmDialog
+          title="Poista kotityö"
+          message={`Poistetaanko "${deletePending.name}"? Kotityö häviää listalta.`}
+          confirmLabel="Poista"
+          onConfirm={() => { handleDelete(deletePending.id); setDeletePending(null) }}
+          onClose={() => setDeletePending(null)}
         />
       )}
     </div>

@@ -85,7 +85,7 @@ export function WeekView({ tasks, today }: Props) {
                   return (
                     <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-1) 0' }}>
                       <span style={{ flex: 1, fontSize: 15 }}>{task.choreName}</span>
-                      <span style={{ fontSize: 13, opacity: 0.6 }}>{formatPrice(task.priceCents)} €</span>
+                      {task.priceCents > 0 && <span style={{ fontSize: 13, opacity: 0.6 }}>{formatPrice(task.priceCents)} €</span>}
                       <span className={className} style={{ display: 'flex', justifyContent: 'center', width: 64, fontSize: 11 }}>
                         {label}
                       </span>

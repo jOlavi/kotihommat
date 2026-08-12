@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase'
 import { TodayView } from '@/pages/child/TodayView'
 import { WeekView } from '@/pages/child/WeekView'
 import { BalanceView } from '@/pages/child/BalanceView'
+import { SettingsDialog } from '@/components/SettingsDialog'
 import { TaskInstance } from '@/types'
 
 type Tab = 'today' | 'week' | 'balance'
@@ -33,6 +34,7 @@ export function ChildShell({ familyId, uid, childName, onSignOut }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('today')
   const [taskInstances, setTaskInstances] = useState<TaskInstance[]>([])
   const [paidTotal, setPaidTotal] = useState(0)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   useEffect(() => {
     return onSnapshot(
@@ -91,21 +93,20 @@ export function ChildShell({ familyId, uid, childName, onSignOut }: Props) {
   return (
     <div style={{ ...childTheme, display: 'flex', flexDirection: 'column', height: '100%' }}>
       <header className="nav" style={{ padding: 'var(--space-3) var(--space-4)', flex: 'none', position: 'relative' }}>
-        <button
-          type="button"
+        <span
           className="tag tag-accent"
-          style={{ border: 'none', cursor: 'pointer', fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 15 }}
-          onClick={onSignOut}
+          style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 15 }}
         >
           {childName}
-        </button>
+        </span>
         <span style={{
           fontFamily: '"Bodoni Moda", var(--font-heading)', fontWeight: 600, fontSize: 22,
           color: 'var(--color-accent)', position: 'absolute', left: '50%', transform: 'translateX(-50%)',
         }}>
           Kotihommat
         </span>
-        <button type="button" className="btn btn-ghost btn-icon" aria-label="Asetukset" style={{ marginLeft: 'auto' }}>
+        <button type="button" className="btn btn-ghost btn-icon" aria-label="Asetukset" style={{ marginLeft: 'auto' }}
+          onClick={() => setSettingsOpen(true)}>
           <Settings size={18} />
         </button>
       </header>
@@ -136,6 +137,13 @@ export function ChildShell({ familyId, uid, childName, onSignOut }: Props) {
           </button>
         ))}
       </nav>
+
+      {settingsOpen && (
+        <SettingsDialog
+          onSignOut={onSignOut}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </div>
   )
 }
