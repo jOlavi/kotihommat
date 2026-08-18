@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pencil } from 'lucide-react'
+import { ChevronLeft, Pencil } from 'lucide-react'
 import { doc, setDoc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { createChildAuthAccount, updateChildAuthPin } from '@/lib/childAuth'
@@ -10,6 +10,7 @@ interface Props {
   familyId: string
   familyCode: string
   members: Member[]
+  onBack?: () => void
 }
 
 function generateUsername(firstName: string, familyCode: string): string {
@@ -22,7 +23,7 @@ function displayUsername(username: string): string {
   return `${name}.${(code ?? '').toUpperCase()}`
 }
 
-export function FamilyView({ familyId, familyCode, members }: Props) {
+export function FamilyView({ familyId, familyCode, members, onBack }: Props) {
   const [addChildOpen, setAddChildOpen] = useState(false)
   const [addParentOpen, setAddParentOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -105,7 +106,14 @@ export function FamilyView({ familyId, familyCode, members }: Props) {
 
   return (
     <div style={{ padding: 'var(--space-4)' }}>
-      <h2 style={{ margin: '0 0 var(--space-4)' }}>Perhe</h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+        {onBack && (
+          <button type="button" className="btn btn-ghost btn-icon" onClick={onBack} aria-label="Takaisin">
+            <ChevronLeft size={18} />
+          </button>
+        )}
+        <h2 style={{ margin: 0 }}>Perhe</h2>
+      </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
         {members.map(m => (

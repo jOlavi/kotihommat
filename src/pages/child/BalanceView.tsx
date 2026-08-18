@@ -1,13 +1,24 @@
+interface Payment {
+  id: string
+  amountCents: number
+  date: string
+}
+
 interface Props {
   earnedCents: number
   paidCents: number
+  payments: Payment[]
 }
 
 function formatPrice(cents: number): string {
   return (cents / 100).toLocaleString('fi-FI', { minimumFractionDigits: 2 })
 }
 
-export function BalanceView({ earnedCents, paidCents }: Props) {
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric', year: 'numeric' })
+}
+
+export function BalanceView({ earnedCents, paidCents, payments }: Props) {
   const outstandingCents = Math.max(0, earnedCents - paidCents)
   const paidPct = earnedCents > 0 ? Math.round((paidCents / earnedCents) * 100) : 0
 
@@ -35,7 +46,7 @@ export function BalanceView({ earnedCents, paidCents }: Props) {
         Täytetty osuus = jo maksettu taskuraha
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
         <div className="card" style={{ gridColumn: '1 / -1', alignItems: 'center', textAlign: 'center', background: 'var(--color-surface)' }}>
           <div className="card-kicker">Ansaittu yhteensä</div>
           <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 30 }}>
@@ -57,6 +68,26 @@ export function BalanceView({ earnedCents, paidCents }: Props) {
           </div>
         </div>
       </div>
+
+      <h5 style={{ margin: '0 0 var(--space-2)' }}>Maksuhistoria</h5>
+      {payments.length === 0 ? (
+        <p style={{ fontSize: 13, opacity: 0.5, margin: 0 }}>Ei maksuja vielä.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+          {payments.map(p => (
+            <div key={p.id} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: 'var(--space-2) 0',
+              borderBottom: '1px solid var(--color-divider)',
+            }}>
+              <span style={{ fontSize: 13, opacity: 0.6 }}>{formatDate(p.date)}</span>
+              <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 15, color: 'var(--color-accent-700)' }}>
+                {formatPrice(p.amountCents)} €
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

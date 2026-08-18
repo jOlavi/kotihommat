@@ -55,9 +55,15 @@ function isAbsent(absences: Absence[], dateISO: string): boolean {
   return absences.some(a => a.from <= dateISO && dateISO <= a.to)
 }
 
-function getAssigneeUid(assignment: Assignment | undefined, chore: Chore, dayKey: DayKey): string {
-  if (chore.type === 'daily') return assignment?.[dayKey] ?? ''
-  return assignment?.all ?? ''
+function normalizeAssignees(val: unknown): string[] {
+  if (!val) return []
+  if (Array.isArray(val)) return val as string[]
+  return [val as string]
+}
+
+function getAssigneeUids(assignment: Assignment | undefined, chore: Chore, dayKey: DayKey): string[] {
+  if (chore.type === 'daily') return normalizeAssignees(assignment?.[dayKey])
+  return assignment?.all ? [assignment.all] : []
 }
 
 function getWeekId(offset: number): string {
@@ -170,25 +176,27 @@ export function WeekView({ chores, familyId, firestoreMembers }: Props) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {plannableChores.length === 0 ? (
               <p style={{ fontSize: 12, opacity: 0.4, margin: 0 }}>Ei kotitöitä.</p>
-            ) : plannableChores.map(chore => {
-              const assigneeUid = getAssigneeUid(weekAssignments[chore.id], chore, dayKey)
-              if (!assigneeUid) return null
-              const assigneeName = firestoreMembers.find(m => m.uid === assigneeUid)?.firstName ?? '–'
-              const inst = weekTaskInstances.find(t => t.choreId === chore.id && t.memberId === assigneeUid && t.date === iso)
-              const done = inst?.status === 'tehty' || inst?.status === 'merkitty'
-              const absent = isAbsent(memberAbsences[assigneeUid] ?? [], iso)
-              return (
-                <div key={chore.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13, opacity: absent ? 0.5 : 1 }}>
-                  <span style={{ flex: 1 }}>{chore.name}</span>
-                  <span style={{ fontSize: 12, opacity: 0.6 }}>{assigneeName}</span>
-                  <span
-                    className={`tag ${absent ? 'tag-neutral' : done ? 'tag-accent' : 'tag-outline'}`}
-                    style={{ width: 64, fontSize: 11, display: 'flex', justifyContent: 'center' }}
-                  >
-                    {absent ? 'Poissa' : done ? 'Tehty' : 'Kesken'}
-                  </span>
-                </div>
-              )
+            ) : plannableChores.flatMap(chore => {
+              const assigneeUids = getAssigneeUids(weekAssignments[chore.id], chore, dayKey)
+              if (assigneeUids.length === 0) return []
+              return assigneeUids.map(assigneeUid => {
+                const assigneeName = firestoreMembers.find(m => m.uid === assigneeUid)?.firstName ?? '–'
+                const inst = weekTaskInstances.find(t => t.choreId === chore.id && t.memberId === assigneeUid && t.date === iso)
+                const done = inst?.status === 'tehty' || inst?.status === 'merkitty'
+                const absent = isAbsent(memberAbsences[assigneeUid] ?? [], iso)
+                return (
+                  <div key={`${chore.id}-${assigneeUid}`} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13, opacity: absent ? 0.5 : 1 }}>
+                    <span style={{ flex: 1 }}>{chore.name}</span>
+                    <span style={{ fontSize: 12, opacity: 0.6 }}>{assigneeName}</span>
+                    <span
+                      className={`tag ${absent ? 'tag-neutral' : done ? 'tag-accent' : 'tag-outline'}`}
+                      style={{ width: 64, fontSize: 11, display: 'flex', justifyContent: 'center' }}
+                    >
+                      {absent ? 'Poissa' : done ? 'Tehty' : 'Kesken'}
+                    </span>
+                  </div>
+                )
+              })
             })}
           </div>
         )

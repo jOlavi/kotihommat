@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
-import { collection, doc, getDocs, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
+import { collection, doc, getDocs, onSnapshot, query, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { ChoreDialog, ChoreFormData } from '@/pages/parent/ChoreDialog'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -61,65 +61,36 @@ function shortName(name: string): string {
   return name.length > 5 ? name.slice(0, 5) + '…' : name
 }
 
-function DaySelect({ value, members, onChange }: {
-  value: string
-  members: Member[]
-  onChange: (uid: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  const selected = members.find(m => m.uid === value)
+function normalizeAssignees(val: unknown): string[] {
+  if (!val) return []
+  if (Array.isArray(val)) return val as string[]
+  return [val as string]
+}
 
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])
+function DayMultiSelect({ value, members, onChange }: {
+  value: string[]
+  members: Member[]
+  onChange: (uids: string[]) => void
+}) {
+  const toggle = (uid: string) =>
+    onChange(value.includes(uid) ? value.filter(u => u !== uid) : [...value, uid])
 
   return (
-    <div ref={ref} style={{ position: 'relative', width: '100%' }}>
-      <button
-        type="button"
-        className="input"
-        onClick={() => setOpen(o => !o)}
-        style={{ padding: '6px 4px', fontSize: '13px', minHeight: 'auto', textAlign: 'center', width: '100%', cursor: 'pointer' }}
-      >
-        {selected ? shortName(selected.firstName) : '–'}
-      </button>
-      {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-          zIndex: 50, background: 'var(--color-surface)', border: '1px solid var(--color-divider)',
-          borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)',
-          minWidth: 80, marginTop: 2,
-        }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
+      {members.map(m => {
+        const selected = value.includes(m.uid)
+        return (
           <button
+            key={m.uid}
             type="button"
-            onClick={() => { onChange(''); setOpen(false) }}
-            style={{ display: 'block', width: '100%', padding: '6px 10px', fontSize: 13, textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer' }}
+            className={`tag ${selected ? 'tag-accent' : 'tag-outline'}`}
+            style={{ fontSize: '10.5px', padding: '3px 4px', cursor: 'pointer', width: '100%', justifyContent: 'center' }}
+            onClick={() => toggle(m.uid)}
           >
-            –
+            {shortName(m.firstName)}
           </button>
-          {members.map(m => (
-            <button
-              key={m.uid}
-              type="button"
-              onClick={() => { onChange(m.uid); setOpen(false) }}
-              style={{
-                display: 'block', width: '100%', padding: '6px 10px', fontSize: 13, textAlign: 'left',
-                background: m.uid === value ? 'var(--color-accent-100)' : 'none',
-                border: 'none', cursor: 'pointer',
-                color: m.uid === value ? 'var(--color-accent-800)' : 'inherit',
-              }}
-            >
-              {m.firstName}
-            </button>
-          ))}
-        </div>
-      )}
+        )
+      })}
     </div>
   )
 }
@@ -166,14 +137,17 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
     const withWeekend = new Set<string>()
     chores.forEach(c => {
       const a = savedAssignments[c.id]
-      if (a && (a.la || a.su)) withWeekend.add(c.id)
+      if (a && (normalizeAssignees(a.la).length > 0 || normalizeAssignees(a.su).length > 0)) withWeekend.add(c.id)
     })
     setWeekendChores(withWeekend)
     setPlannerDraft(
-      chores.filter(c => c.type !== 'once').map(c => ({
-        choreId: c.id,
-        assignment: savedAssignments[c.id] ?? {},
-      }))
+      chores.filter(c => c.type !== 'once').map(c => {
+        const saved = savedAssignments[c.id] ?? {}
+        const normalized: Assignment = {}
+        if (saved.all) normalized.all = saved.all
+        DAY_KEYS.forEach(day => { normalized[day] = normalizeAssignees(saved[day]) })
+        return { choreId: c.id, assignment: normalized }
+      })
     )
   }, [chores, savedAssignments])
 
@@ -190,6 +164,17 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
           type: data.type,
           assignedMemberIds: data.assignedMemberIds,
         })
+        if (data.name !== editingChore.name) {
+          const snap = await getDocs(query(
+            collection(db, `families/${familyId}/taskInstances`),
+            where('choreId', '==', editingChore.id)
+          ))
+          if (!snap.empty) {
+            const batch = writeBatch(db)
+            snap.docs.forEach(d => batch.update(d.ref, { choreName: data.name }))
+            await batch.commit()
+          }
+        }
       } else {
         const ref = doc(collection(db, `families/${familyId}/chores`))
         await setDoc(ref, {
@@ -219,9 +204,9 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
   const openAdd = () => { setEditingChore(null); setDialogOpen(true) }
   const openEdit = (chore: Chore) => { setEditingChore(chore); setDialogOpen(true) }
 
-  const updateDay = (choreId: string, day: DayKey, uid: string) =>
+  const updateDay = (choreId: string, day: DayKey, uids: string[]) =>
     setPlannerDraft(prev => prev.map(e =>
-      e.choreId === choreId ? { ...e, assignment: { ...e.assignment, [day]: uid } } : e
+      e.choreId === choreId ? { ...e, assignment: { ...e.assignment, [day]: uids } } : e
     ))
 
   const updateAll = (choreId: string, uid: string) =>
@@ -238,7 +223,7 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
     if (!include) {
       setPlannerDraft(prev => prev.map(e =>
         e.choreId === choreId
-          ? { ...e, assignment: { ...e.assignment, la: '', su: '' } }
+          ? { ...e, assignment: { ...e.assignment, la: [], su: [] } }
           : e
       ))
     }
@@ -250,13 +235,16 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
     const weekDates = getWeekDates(weekOffset)
     try {
       await Promise.all(
-        plannerDraft.map(({ choreId, assignment }) =>
-          setDoc(
+        plannerDraft.map(({ choreId, assignment }) => {
+          const clean: Record<string, unknown> = {}
+          for (const [k, v] of Object.entries(assignment)) {
+            if (v !== undefined) clean[k] = v
+          }
+          return setDoc(
             doc(db, `families/${familyId}/weeklyPlans/${weekId}/assignments/${choreId}`),
-            assignment,
-            { merge: true }
+            clean
           )
-        )
+        })
       )
 
       const batch = writeBatch(db)
@@ -265,13 +253,14 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
         if (!chore) continue
         if (chore.type === 'daily') {
           for (const { date, dayKey } of weekDates) {
-            const memberId = assignment[dayKey]
-            if (!memberId) continue
-            batch.set(
-              doc(db, `families/${familyId}/taskInstances/${choreId}_${memberId}_${date}`),
-              { choreId, choreName: chore.name, memberId, date, isoWeek: weekId, priceCents: chore.priceCents },
-              { merge: true }
-            )
+            const memberIds = normalizeAssignees(assignment[dayKey])
+            for (const memberId of memberIds) {
+              batch.set(
+                doc(db, `families/${familyId}/taskInstances/${choreId}_${memberId}_${date}`),
+                { choreId, choreName: chore.name, memberId, date, isoWeek: weekId, priceCents: chore.priceCents },
+                { merge: true }
+              )
+            }
           }
         } else if (chore.type === 'weekly') {
           const memberId = assignment.all
@@ -447,10 +436,10 @@ export function ChoresView({ familyId, firestoreMembers }: Props) {
                           {visibleDays.map(day => (
                             <div key={day} style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
                               <span style={{ fontSize: '9.5px', opacity: 0.55 }}>{DAY_SHORTS[day]}</span>
-                              <DaySelect
-                                value={entry?.assignment[day] ?? ''}
+                              <DayMultiSelect
+                                value={normalizeAssignees(entry?.assignment[day])}
                                 members={choreMembers}
-                                onChange={uid => updateDay(c.id, day, uid)}
+                                onChange={uids => updateDay(c.id, day, uids)}
                               />
                             </div>
                           ))}

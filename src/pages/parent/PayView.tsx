@@ -115,8 +115,17 @@ export function PayView({ familyId, firestoreMembers }: Props) {
         ))}
       </div>
 
+      {error && <p style={{ fontSize: 13, color: 'oklch(50% 0.18 25)', margin: '0 0 var(--space-2)' }}>{error}</p>}
+
+      <button type="button" className="btn btn-primary btn-block"
+        style={{ marginBottom: 'var(--space-4)' }}
+        disabled={outstandingCents <= 0 || loading}
+        onClick={() => setPayOpen(true)}>
+        Merkitse maksetuksi
+      </button>
+
       <h5 style={{ margin: '0 0 var(--space-2)' }}>Maksuhistoria</h5>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 'var(--space-4)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {payments.length === 0 ? (
           <p style={{ fontSize: 12, opacity: 0.5, margin: 0 }}>Ei maksuja vielä.</p>
         ) : payments.map(p => (
@@ -128,14 +137,6 @@ export function PayView({ familyId, firestoreMembers }: Props) {
           </div>
         ))}
       </div>
-
-      {error && <p style={{ fontSize: 13, color: 'oklch(50% 0.18 25)', margin: '0 0 var(--space-2)' }}>{error}</p>}
-
-      <button type="button" className="btn btn-primary btn-block"
-        disabled={outstandingCents <= 0 || loading}
-        onClick={() => setPayOpen(true)}>
-        Merkitse maksetuksi
-      </button>
 
       {payOpen && (
         <PayDialog

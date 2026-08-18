@@ -1,21 +1,23 @@
 import { useState, useEffect } from "react";
 import {
+  Home,
   ListChecks,
   Calendar,
-  Users,
   UserCircle,
   Wallet,
   Settings,
 } from "lucide-react";
-import { collection, doc, onSnapshot } from "firebase/firestore";
+import { collection, doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { FamilyView } from "@/pages/parent/FamilyView";
 import { ChoresView } from "@/pages/parent/ChoresView";
 import { WeekView } from "@/pages/parent/WeekView";
 import { ProfileView } from "@/pages/parent/ProfileView";
 import { PayView } from "@/pages/parent/PayView";
+import { TodayView } from "@/pages/child/TodayView";
 import { SettingsDialog } from "@/components/SettingsDialog";
-import { Chore, Member } from "@/types"
+import { Chore, Member, TaskInstance } from "@/types"
+
 
 interface Props {
   familyId: string
@@ -23,14 +25,26 @@ interface Props {
   onSignOut: () => void
 }
 
-type Tab = "chores" | "viikko" | "family" | "lapset" | "maksut";
+type Tab = "today" | "chores" | "viikko" | "lapset" | "maksut" | "family";
 
 export function ParentShell({ familyId, uid, onSignOut }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>("chores");
+  const [activeTab, setActiveTab] = useState<Tab>("today");
+  const [today, setToday] = useState(() => new Date().toISOString().slice(0, 10));
   const [chores, setChores] = useState<Chore[]>([]);
   const [firestoreMembers, setFirestoreMembers] = useState<Member[]>([]);
   const [familyCode, setFamilyCode] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [parentTaskInstances, setParentTaskInstances] = useState<TaskInstance[]>([])
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') {
+        setToday(new Date().toISOString().slice(0, 10))
+      }
+    }
+    document.addEventListener('visibilitychange', refresh)
+    return () => document.removeEventListener('visibilitychange', refresh)
+  }, [])
 
   useEffect(() => {
     return onSnapshot(doc(db, `families/${familyId}`), snap => {
@@ -40,7 +54,7 @@ export function ParentShell({ familyId, uid, onSignOut }: Props) {
 
   useEffect(() => {
     return onSnapshot(collection(db, `families/${familyId}/chores`), snap => {
-      setChores(snap.docs.map(d => ({ id: d.id, ...d.data() } as Chore)))
+      setChores(snap.docs.map(d => ({ id: d.id, ...d.data() } as Chore)).filter(c => c.active !== false))
     })
   }, [familyId])
 
@@ -51,12 +65,35 @@ export function ParentShell({ familyId, uid, onSignOut }: Props) {
     });
   }, [familyId]);
 
+  useEffect(() => {
+    return onSnapshot(
+      collection(db, `families/${familyId}/taskInstances`),
+      snap => {
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as TaskInstance))
+        setParentTaskInstances(all.filter(t => t.memberId === uid))
+      }
+    )
+  }, [familyId, uid])
+
+  const activeChoreIds = new Set(chores.map(c => c.id))
+  const todayTasks = parentTaskInstances.filter(t => t.date === today && activeChoreIds.has(t.choreId))
+
+  const handleToggle = async (id: string) => {
+    const instance = parentTaskInstances.find(t => t.id === id)
+    if (!instance || instance.status === 'merkitty') return
+    const newStatus = (instance.status ?? 'tekematon') === 'tehty' ? 'tekematon' : 'tehty'
+    await updateDoc(doc(db, `families/${familyId}/taskInstances/${id}`), {
+      status: newStatus,
+      completedAt: newStatus === 'tehty' ? new Date().toISOString() : null,
+    })
+  }
+
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: "today", label: "Tänään", icon: <Home size={20} /> },
     { id: "chores", label: "Kotityöt", icon: <ListChecks size={20} /> },
     { id: "viikko", label: "Viikko", icon: <Calendar size={20} /> },
     { id: "lapset", label: "Lapset", icon: <UserCircle size={20} /> },
     { id: "maksut", label: "Maksut", icon: <Wallet size={20} /> },
-    { id: "family", label: "Perhe", icon: <Users size={20} /> },
   ];
 
   return (
@@ -100,6 +137,14 @@ export function ParentShell({ familyId, uid, onSignOut }: Props) {
       </header>
 
       <main style={{ flex: 1, overflowY: "auto" }}>
+        {activeTab === "today" && (
+          <TodayView
+            tasks={todayTasks}
+            onToggle={handleToggle}
+            absences={[]}
+            today={today}
+          />
+        )}
         {activeTab === "chores" && (
           <ChoresView
             familyId={familyId}
@@ -113,13 +158,6 @@ export function ParentShell({ familyId, uid, onSignOut }: Props) {
             firestoreMembers={firestoreMembers}
           />
         )}
-        {activeTab === "family" && (
-          <FamilyView
-            familyId={familyId}
-            familyCode={familyCode}
-            members={firestoreMembers}
-          />
-        )}
         {activeTab === "lapset" && (
           <ProfileView
             chores={chores}
@@ -131,6 +169,14 @@ export function ParentShell({ familyId, uid, onSignOut }: Props) {
           <PayView
             familyId={familyId}
             firestoreMembers={firestoreMembers}
+          />
+        )}
+        {activeTab === "family" && (
+          <FamilyView
+            familyId={familyId}
+            familyCode={familyCode}
+            members={firestoreMembers}
+            onBack={() => setActiveTab("chores")}
           />
         )}
       </main>
@@ -175,6 +221,7 @@ export function ParentShell({ familyId, uid, onSignOut }: Props) {
         <SettingsDialog
           onSignOut={onSignOut}
           onClose={() => setSettingsOpen(false)}
+          onOpenFamily={() => setActiveTab("family")}
         />
       )}
     </div>

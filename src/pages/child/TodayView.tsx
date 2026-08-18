@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { TriangleAlert, X } from 'lucide-react'
+import { TriangleAlert } from 'lucide-react'
 import { Absence, TaskInstance } from '@/types'
 
 interface Props {
@@ -17,14 +16,13 @@ const DAY_NAMES = ['Sunnuntai', 'Maanantai', 'Tiistai', 'Keskiviikko', 'Torstai'
 
 export function TodayView({ tasks, onToggle, absences, today }: Props) {
   const isAbsent = absences.some(a => a.from <= today && today <= a.to)
-  const [bannerDismissed, setBannerDismissed] = useState(false)
 
   const now = new Date()
   const dayName = DAY_NAMES[now.getDay()]
   const dateLabel = now.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })
 
   const undoneCount = tasks.filter(t => (t.status ?? 'tekematon') === 'tekematon').length
-  const showBanner = !bannerDismissed && undoneCount > 0
+  const allDone = tasks.length > 0 && undoneCount === 0
 
   return (
     <div style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
@@ -38,23 +36,26 @@ export function TodayView({ tasks, onToggle, absences, today }: Props) {
           <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Sinut on merkitty poissaolevaksi tänään.</span>
         </div>
       )}
-      {showBanner && (
+
+      {tasks.length > 0 && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
-          border: '1px solid var(--color-accent)', borderRadius: 'var(--radius-md)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          border: `1px solid var(--color-accent)`, borderRadius: 'var(--radius-md)',
           padding: 'var(--space-2) var(--space-3)', background: 'var(--color-accent-100)',
+          gap: 'var(--space-2)',
         }}>
-          <TriangleAlert size={16} color="var(--color-accent-700)" style={{ flex: 'none' }} />
-          <span style={{ fontSize: 13, flex: 1, color: 'var(--color-accent-800)' }}>
-            Sinulla on {undoneCount} tekemätöntä tehtävää tänään
-          </span>
-          <button
-            type="button" className="btn btn-ghost btn-icon"
-            style={{ width: 24, height: 24 }} aria-label="Sulje"
-            onClick={() => setBannerDismissed(true)}
-          >
-            <X size={13} />
-          </button>
+          {allDone ? (
+            <span style={{ fontSize: 13, color: 'var(--color-accent-800)', textAlign: 'center' }}>
+              Tämän päivän kotityöt on tehty!
+            </span>
+          ) : (
+            <>
+              <TriangleAlert size={16} color="var(--color-accent-700)" style={{ flex: 'none' }} />
+              <span style={{ fontSize: 13, color: 'var(--color-accent-800)' }}>
+                Sinulla on {undoneCount} tekemätöntä tehtävää tänään
+              </span>
+            </>
+          )}
         </div>
       )}
 

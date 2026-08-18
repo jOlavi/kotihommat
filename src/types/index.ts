@@ -30,7 +30,7 @@ export interface Chore {
 }
 
 export type DayKey = 'ma' | 'ti' | 'ke' | 'to' | 'pe' | 'la' | 'su'
-export type Assignment = Partial<Record<DayKey, string>> & { all?: string }
+export type Assignment = Partial<Record<DayKey, string[]>> & { all?: string }
 
 export interface WeeklyPlan {
   weekId: string

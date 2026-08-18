@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { collection, doc, onSnapshot, updateDoc, addDoc, setDoc } from 'firebase/firestore'
+import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { collection, deleteDoc, doc, onSnapshot, updateDoc, addDoc, setDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { AbsenceDialog } from '@/pages/parent/AbsenceDialog'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -57,6 +57,12 @@ function formatPrice(cents: number): string {
   return (cents / 100).toLocaleString('fi-FI', { minimumFractionDigits: 2 })
 }
 
+function normalizeAssignees(val: unknown): string[] {
+  if (!val) return []
+  if (Array.isArray(val)) return val as string[]
+  return [val as string]
+}
+
 function formatAbsenceRange(from: string, to: string): string {
   const fmt = (s: string) => new Date(s).toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })
   const toFull = new Date(to).toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric', year: 'numeric' })
@@ -76,6 +82,7 @@ export function ProfileView({ chores, familyId, firestoreMembers }: Props) {
     () => childMembers[0]?.uid ?? ''
   )
   const [absenceOpen, setAbsenceOpen] = useState(false)
+  const [deletePendingAbsence, setDeletePendingAbsence] = useState<FirestoreAbsence | null>(null)
   const [togglePending, setTogglePending] = useState<{ chore: Chore; memberId: string; date: string; instance: TaskInstance | undefined } | null>(null)
   const [weekOffset, setWeekOffset] = useState(0)
   const [weekAssignments, setWeekAssignments] = useState<Record<string, Assignment>>({})
@@ -148,6 +155,11 @@ export function ProfileView({ chores, familyId, firestoreMembers }: Props) {
     setAbsenceOpen(false)
   }
 
+  const handleAbsenceDelete = async (absenceId: string) => {
+    if (!selectedUid) return
+    await deleteDoc(doc(db, `families/${familyId}/members/${selectedUid}/absences/${absenceId}`))
+  }
+
   if (childMembers.length === 0) {
     return (
       <div style={{ padding: 'var(--space-4)' }}>
@@ -180,7 +192,16 @@ export function ProfileView({ chores, familyId, firestoreMembers }: Props) {
         ) : absences.map(a => (
           <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13 }}>
             <span className="tag tag-neutral">{a.type}</span>
-            <span style={{ opacity: 0.7 }}>{formatAbsenceRange(a.from, a.to)}</span>
+            <span style={{ flex: 1, opacity: 0.7 }}>{formatAbsenceRange(a.from, a.to)}</span>
+            <button
+              type="button"
+              className="btn btn-ghost btn-icon"
+              style={{ width: 24, height: 24, opacity: 0.5 }}
+              aria-label="Poista poissaolo"
+              onClick={() => setDeletePendingAbsence(a)}
+            >
+              <X size={13} />
+            </button>
           </div>
         ))}
       </div>
@@ -207,7 +228,7 @@ export function ProfileView({ chores, familyId, firestoreMembers }: Props) {
           const iso = date.toISOString().slice(0, 10)
           const childChores = plannableChores.filter(chore => {
             const assignment = weekAssignments[chore.id]
-            if (chore.type === 'daily') return assignment?.[dayKey] === selectedUid
+            if (chore.type === 'daily') return normalizeAssignees(assignment?.[dayKey]).includes(selectedUid)
             return assignment?.all === selectedUid
           })
           if (childChores.length === 0) return null
@@ -244,6 +265,16 @@ export function ProfileView({ chores, familyId, firestoreMembers }: Props) {
           )
         })
       })()}
+
+      {deletePendingAbsence && (
+        <ConfirmDialog
+          title="Poista poissaolo"
+          message={`Poistetaanko poissaolo ${formatAbsenceRange(deletePendingAbsence.from, deletePendingAbsence.to)}?`}
+          confirmLabel="Poista"
+          onConfirm={() => { handleAbsenceDelete(deletePendingAbsence.id); setDeletePendingAbsence(null) }}
+          onClose={() => setDeletePendingAbsence(null)}
+        />
+      )}
 
       {absenceOpen && (
         <AbsenceDialog

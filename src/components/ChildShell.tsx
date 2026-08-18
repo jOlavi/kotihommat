@@ -6,7 +6,7 @@ import { TodayView } from '@/pages/child/TodayView'
 import { WeekView } from '@/pages/child/WeekView'
 import { BalanceView } from '@/pages/child/BalanceView'
 import { SettingsDialog } from '@/components/SettingsDialog'
-import { Absence, TaskInstance } from '@/types'
+import { Absence, Chore, TaskInstance } from '@/types'
 
 type Tab = 'today' | 'week' | 'balance'
 
@@ -27,15 +27,40 @@ function getCurrentWeekId(): string {
   return `${now.getFullYear()}-W${String(week).padStart(2, '0')}`
 }
 
-const WEEK_ID = getCurrentWeekId()
-const TODAY = new Date().toISOString().slice(0, 10)
-
 export function ChildShell({ familyId, uid, childName, onSignOut }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('today')
+  const [today, setToday] = useState(() => new Date().toISOString().slice(0, 10))
+  const [weekId, setWeekId] = useState(() => getCurrentWeekId())
   const [taskInstances, setTaskInstances] = useState<TaskInstance[]>([])
+  const [activeChoreIds, setActiveChoreIds] = useState<Set<string>>(new Set())
   const [absences, setAbsences] = useState<Absence[]>([])
   const [paidTotal, setPaidTotal] = useState(0)
+  const [payments, setPayments] = useState<{ id: string; amountCents: number; date: string }[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') {
+        setToday(new Date().toISOString().slice(0, 10))
+        setWeekId(getCurrentWeekId())
+      }
+    }
+    document.addEventListener('visibilitychange', refresh)
+    return () => document.removeEventListener('visibilitychange', refresh)
+  }, [])
+
+  useEffect(() => {
+    return onSnapshot(
+      collection(db, `families/${familyId}/chores`),
+      snap => {
+        setActiveChoreIds(new Set(
+          snap.docs
+            .filter(d => (d.data() as Chore).active !== false)
+            .map(d => d.id)
+        ))
+      }
+    )
+  }, [familyId])
 
   useEffect(() => {
     return onSnapshot(
@@ -63,8 +88,21 @@ export function ChildShell({ familyId, uid, childName, onSignOut }: Props) {
     )
   }, [familyId, uid])
 
-  const todayTasks = taskInstances.filter(t => t.date === TODAY)
-  const weekTasks = taskInstances.filter(t => t.isoWeek === WEEK_ID)
+  useEffect(() => {
+    return onSnapshot(
+      collection(db, `families/${familyId}/members/${uid}/payments`),
+      snap => {
+        const list = snap.docs
+          .map(d => ({ id: d.id, amountCents: d.data().amountCents as number, date: d.data().date as string }))
+          .sort((a, b) => b.date.localeCompare(a.date))
+        setPayments(list)
+      }
+    )
+  }, [familyId, uid])
+
+  const activeTasks = taskInstances.filter(t => activeChoreIds.has(t.choreId))
+  const todayTasks = activeTasks.filter(t => t.date === today)
+  const weekTasks = activeTasks.filter(t => t.isoWeek === weekId)
   const earnedCents = taskInstances
     .filter(t => t.status === 'tehty' || t.status === 'merkitty')
     .reduce((sum, t) => sum + t.priceCents, 0)
@@ -120,9 +158,9 @@ export function ChildShell({ familyId, uid, childName, onSignOut }: Props) {
       </header>
 
       <main style={{ flex: 1, overflowY: 'auto' }}>
-        {activeTab === 'today' && <TodayView tasks={todayTasks} onToggle={handleToggle} absences={absences} today={TODAY} />}
-        {activeTab === 'week' && <WeekView tasks={weekTasks} today={TODAY} absences={absences} />}
-        {activeTab === 'balance' && <BalanceView earnedCents={earnedCents} paidCents={paidTotal} />}
+        {activeTab === 'today' && <TodayView tasks={todayTasks} onToggle={handleToggle} absences={absences} today={today} />}
+        {activeTab === 'week' && <WeekView tasks={weekTasks} today={today} absences={absences} />}
+        {activeTab === 'balance' && <BalanceView earnedCents={earnedCents} paidCents={paidTotal} payments={payments} />}
       </main>
 
       <nav style={{ display: 'flex', borderTop: '1px solid var(--color-divider)', flex: 'none' }}>
