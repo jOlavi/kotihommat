@@ -1,10 +1,15 @@
 import { useEffect, useRef } from 'react'
-import { Absence, TaskInstance, TaskStatus } from '@/types'
+import { Absence, Assignment, Chore, TaskInstance, TaskStatus } from '@/types'
 
 interface Props {
   tasks: TaskInstance[]
   today: string
   absences: Absence[]
+  onceChores?: Chore[]
+  weekAssignments?: Record<string, Assignment>
+  uid?: string
+  onToggle?: (taskId: string) => void
+  onRelease?: (choreId: string) => Promise<void>
 }
 
 function isAbsent(absences: Absence[], dateISO: string): boolean {
@@ -49,7 +54,7 @@ const STATUS_TAG: Record<TaskStatus, { className: string; label: string }> = {
   merkitty:  { className: 'tag tag-neutral', label: 'Maksettu' },
 }
 
-export function WeekView({ tasks, today, absences }: Props) {
+export function WeekView({ tasks, today, absences, onceChores, weekAssignments, uid, onToggle, onRelease }: Props) {
   const todayRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -63,9 +68,14 @@ export function WeekView({ tasks, today, absences }: Props) {
   const weekNumber = getISOWeek(now)
   const weekDays = getWeekDays(now)
 
+  const onceChoreIds = new Set((onceChores ?? []).map(c => c.id))
+  const regularTasks = tasks.filter(t => !onceChoreIds.has(t.choreId))
+
   const weekEarned = tasks
     .filter(t => t.status === 'tehty' || t.status === 'merkitty')
     .reduce((sum, t) => sum + t.priceCents, 0)
+
+  const claimedOnceChores = (onceChores ?? []).filter(chore => !!weekAssignments?.[chore.id]?.all)
 
   return (
     <div style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
@@ -76,11 +86,74 @@ export function WeekView({ tasks, today, absences }: Props) {
         </span>
       </div>
 
+      {claimedOnceChores.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 600, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Kerran tällä viikolla
+          </p>
+          {claimedOnceChores.map(chore => {
+            const claimedBy = weekAssignments?.[chore.id]?.all
+            const isOwn = claimedBy === uid
+            const instance = tasks.find(t => t.choreId === chore.id)
+            const status = instance?.status ?? 'tekematon'
+            const done = status === 'tehty' || status === 'merkitty'
+            const locked = status === 'merkitty'
+            return (
+              <div
+                key={chore.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                  padding: 'var(--space-3)',
+                  border: '1px solid var(--color-divider)',
+                  borderRadius: 'var(--radius-md)',
+                  opacity: (!isOwn) ? 0.6 : 1,
+                }}
+              >
+                {isOwn && onToggle && instance && (
+                  <input
+                    type="checkbox"
+                    checked={done}
+                    disabled={locked}
+                    onChange={() => !locked && onToggle(instance.id)}
+                    style={{ width: 20, height: 20, accentColor: 'var(--color-accent)', cursor: locked ? 'not-allowed' : 'pointer', flex: 'none' }}
+                  />
+                )}
+                <span style={{ flex: 1, fontSize: 15, textDecoration: isOwn && done ? 'line-through' : 'none', opacity: isOwn && done ? 0.5 : 1 }}>
+                  {chore.name}
+                </span>
+                {chore.priceCents > 0 && (
+                  <span style={{ fontSize: 13, opacity: 0.6 }}>{formatPrice(chore.priceCents)} €</span>
+                )}
+                {isOwn ? (
+                  <>
+                    <span className={STATUS_TAG[status as TaskStatus].className} style={{ display: 'flex', justifyContent: 'center', width: 56, fontSize: 11 }}>
+                      {STATUS_TAG[status as TaskStatus].label}
+                    </span>
+                    {onRelease && !locked && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        style={{ fontSize: 11, padding: '2px 8px', height: 'auto', opacity: 0.7 }}
+                        onClick={() => onRelease(chore.id)}
+                      >
+                        Vapauta
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <span className="tag tag-neutral" style={{ fontSize: 11 }}>Varattu</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {weekDays.map((day, i) => {
         const iso = toISODate(day)
         const isToday = iso === today
         const absent = isAbsent(absences, iso)
-        const dayTasks = tasks.filter(t => t.date === iso)
+        const dayTasks = regularTasks.filter(t => t.date === iso)
         const dateLabel = day.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' })
 
         if (isToday) {

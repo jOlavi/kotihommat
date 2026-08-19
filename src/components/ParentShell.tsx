@@ -7,7 +7,7 @@ import {
   Wallet,
   Settings,
 } from "lucide-react";
-import { collection, doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { collection, doc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { FamilyView } from "@/pages/parent/FamilyView";
 import { ChoresView } from "@/pages/parent/ChoresView";
@@ -16,7 +16,17 @@ import { ProfileView } from "@/pages/parent/ProfileView";
 import { PayView } from "@/pages/parent/PayView";
 import { TodayView } from "@/pages/child/TodayView";
 import { SettingsDialog } from "@/components/SettingsDialog";
-import { Chore, Member, TaskInstance } from "@/types"
+import { Assignment, Chore, Member, TaskInstance } from "@/types"
+
+function getCurrentWeekId(): string {
+  const now = new Date()
+  const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
+  const dayNum = d.getUTCDay() || 7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  const week = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+  return `${now.getFullYear()}-W${String(week).padStart(2, '0')}`
+}
 
 
 interface Props {
@@ -30,16 +40,19 @@ type Tab = "today" | "chores" | "viikko" | "lapset" | "maksut" | "family";
 export function ParentShell({ familyId, uid, onSignOut }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("today");
   const [today, setToday] = useState(() => new Date().toISOString().slice(0, 10));
+  const [weekId, setWeekId] = useState(() => getCurrentWeekId());
   const [chores, setChores] = useState<Chore[]>([]);
   const [firestoreMembers, setFirestoreMembers] = useState<Member[]>([]);
   const [familyCode, setFamilyCode] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [parentTaskInstances, setParentTaskInstances] = useState<TaskInstance[]>([])
+  const [allFamilyInstances, setAllFamilyInstances] = useState<TaskInstance[]>([])
+  const [weekAssignments, setWeekAssignments] = useState<Record<string, Assignment>>({})
 
   useEffect(() => {
     const refresh = () => {
       if (document.visibilityState === 'visible') {
         setToday(new Date().toISOString().slice(0, 10))
+        setWeekId(getCurrentWeekId())
       }
     }
     document.addEventListener('visibilitychange', refresh)
@@ -68,24 +81,45 @@ export function ParentShell({ familyId, uid, onSignOut }: Props) {
   useEffect(() => {
     return onSnapshot(
       collection(db, `families/${familyId}/taskInstances`),
+      snap => setAllFamilyInstances(snap.docs.map(d => ({ id: d.id, ...d.data() } as TaskInstance)))
+    )
+  }, [familyId])
+
+  useEffect(() => {
+    return onSnapshot(
+      collection(db, `families/${familyId}/weeklyPlans/${weekId}/assignments`),
       snap => {
-        const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as TaskInstance))
-        setParentTaskInstances(all.filter(t => t.memberId === uid))
+        const loaded: Record<string, Assignment> = {}
+        snap.docs.forEach(d => { loaded[d.id] = d.data() as Assignment })
+        setWeekAssignments(loaded)
       }
     )
-  }, [familyId, uid])
+  }, [familyId, weekId])
 
   const activeChoreIds = new Set(chores.map(c => c.id))
-  const todayTasks = parentTaskInstances.filter(t => t.date === today && activeChoreIds.has(t.choreId))
+  const onceChores = chores.filter(c => c.type === 'once')
+  const myInstances = allFamilyInstances.filter(t => t.memberId === uid)
+  const todayTasks = myInstances.filter(t => t.date === today && activeChoreIds.has(t.choreId))
 
   const handleToggle = async (id: string) => {
-    const instance = parentTaskInstances.find(t => t.id === id)
+    const instance = myInstances.find(t => t.id === id)
     if (!instance || instance.status === 'merkitty') return
     const newStatus = (instance.status ?? 'tekematon') === 'tehty' ? 'tekematon' : 'tehty'
     await updateDoc(doc(db, `families/${familyId}/taskInstances/${id}`), {
       status: newStatus,
       completedAt: newStatus === 'tehty' ? new Date().toISOString() : null,
     })
+  }
+
+  const handleClaim = async (choreId: string) => {
+    const chore = chores.find(c => c.id === choreId)
+    if (!chore) return
+    await setDoc(doc(db, `families/${familyId}/weeklyPlans/${weekId}/assignments/${choreId}`), { all: uid })
+    await setDoc(
+      doc(db, `families/${familyId}/taskInstances/${choreId}_${uid}_${today}`),
+      { choreId, choreName: chore.name, memberId: uid, date: today, isoWeek: weekId, priceCents: chore.priceCents, status: 'tekematon' },
+      { merge: true }
+    )
   }
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -143,6 +177,10 @@ export function ParentShell({ familyId, uid, onSignOut }: Props) {
             onToggle={handleToggle}
             absences={[]}
             today={today}
+            onceChores={onceChores}
+            weekAssignments={weekAssignments}
+            uid={uid}
+            onClaim={handleClaim}
           />
         )}
         {activeTab === "chores" && (

@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { Home, CalendarDays, PiggyBank, Settings } from 'lucide-react'
-import { collection, doc, onSnapshot, updateDoc } from 'firebase/firestore'
+import { collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { TodayView } from '@/pages/child/TodayView'
 import { WeekView } from '@/pages/child/WeekView'
 import { BalanceView } from '@/pages/child/BalanceView'
 import { SettingsDialog } from '@/components/SettingsDialog'
-import { Absence, Chore, TaskInstance } from '@/types'
+import { Absence, Assignment, Chore, TaskInstance } from '@/types'
 
 type Tab = 'today' | 'week' | 'balance'
 
@@ -31,8 +31,9 @@ export function ChildShell({ familyId, uid, childName, onSignOut }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('today')
   const [today, setToday] = useState(() => new Date().toISOString().slice(0, 10))
   const [weekId, setWeekId] = useState(() => getCurrentWeekId())
-  const [taskInstances, setTaskInstances] = useState<TaskInstance[]>([])
-  const [activeChoreIds, setActiveChoreIds] = useState<Set<string>>(new Set())
+  const [chores, setChores] = useState<Chore[]>([])
+  const [weekAssignments, setWeekAssignments] = useState<Record<string, Assignment>>({})
+  const [allFamilyInstances, setAllFamilyInstances] = useState<TaskInstance[]>([])
   const [absences, setAbsences] = useState<Absence[]>([])
   const [paidTotal, setPaidTotal] = useState(0)
   const [payments, setPayments] = useState<{ id: string; amountCents: number; date: string }[]>([])
@@ -52,25 +53,27 @@ export function ChildShell({ familyId, uid, childName, onSignOut }: Props) {
   useEffect(() => {
     return onSnapshot(
       collection(db, `families/${familyId}/chores`),
-      snap => {
-        setActiveChoreIds(new Set(
-          snap.docs
-            .filter(d => (d.data() as Chore).active !== false)
-            .map(d => d.id)
-        ))
-      }
+      snap => setChores(snap.docs.map(d => ({ id: d.id, ...d.data() } as Chore)))
     )
   }, [familyId])
 
   useEffect(() => {
     return onSnapshot(
-      collection(db, `families/${familyId}/taskInstances`),
+      collection(db, `families/${familyId}/weeklyPlans/${weekId}/assignments`),
       snap => {
-        const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as TaskInstance))
-        setTaskInstances(all.filter(t => t.memberId === uid))
+        const loaded: Record<string, Assignment> = {}
+        snap.docs.forEach(d => { loaded[d.id] = d.data() as Assignment })
+        setWeekAssignments(loaded)
       }
     )
-  }, [familyId, uid])
+  }, [familyId, weekId])
+
+  useEffect(() => {
+    return onSnapshot(
+      collection(db, `families/${familyId}/taskInstances`),
+      snap => setAllFamilyInstances(snap.docs.map(d => ({ id: d.id, ...d.data() } as TaskInstance)))
+    )
+  }, [familyId])
 
   useEffect(() => {
     return onSnapshot(
@@ -100,6 +103,9 @@ export function ChildShell({ familyId, uid, childName, onSignOut }: Props) {
     )
   }, [familyId, uid])
 
+  const activeChoreIds = new Set(chores.filter(c => c.active !== false).map(c => c.id))
+  const onceChores = chores.filter(c => c.active !== false && c.type === 'once')
+  const taskInstances = allFamilyInstances.filter(t => t.memberId === uid)
   const activeTasks = taskInstances.filter(t => activeChoreIds.has(t.choreId))
   const todayTasks = activeTasks.filter(t => t.date === today)
   const weekTasks = activeTasks.filter(t => t.isoWeek === weekId)
@@ -115,6 +121,25 @@ export function ChildShell({ familyId, uid, childName, onSignOut }: Props) {
       status: newStatus,
       completedAt: newStatus === 'tehty' ? new Date().toISOString() : null,
     })
+  }
+
+  const handleClaim = async (choreId: string) => {
+    const chore = chores.find(c => c.id === choreId)
+    if (!chore) return
+    await setDoc(doc(db, `families/${familyId}/weeklyPlans/${weekId}/assignments/${choreId}`), { all: uid })
+    await setDoc(
+      doc(db, `families/${familyId}/taskInstances/${choreId}_${uid}_${today}`),
+      { choreId, choreName: chore.name, memberId: uid, date: today, isoWeek: weekId, priceCents: chore.priceCents, status: 'tekematon' },
+      { merge: true }
+    )
+  }
+
+  const handleRelease = async (choreId: string) => {
+    await deleteDoc(doc(db, `families/${familyId}/weeklyPlans/${weekId}/assignments/${choreId}`))
+    const instance = taskInstances.find(t => t.choreId === choreId && t.isoWeek === weekId)
+    if (instance) {
+      await deleteDoc(doc(db, `families/${familyId}/taskInstances/${instance.id}`))
+    }
   }
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -139,10 +164,7 @@ export function ChildShell({ familyId, uid, childName, onSignOut }: Props) {
   return (
     <div style={{ ...childTheme, display: 'flex', flexDirection: 'column', height: '100%' }}>
       <header className="nav" style={{ padding: 'var(--space-3) var(--space-4)', flex: 'none', position: 'relative' }}>
-        <span
-          className="tag tag-accent"
-          style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 15 }}
-        >
+        <span className="tag tag-accent" style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 15 }}>
           {childName}
         </span>
         <span style={{
@@ -158,8 +180,31 @@ export function ChildShell({ familyId, uid, childName, onSignOut }: Props) {
       </header>
 
       <main style={{ flex: 1, overflowY: 'auto' }}>
-        {activeTab === 'today' && <TodayView tasks={todayTasks} onToggle={handleToggle} absences={absences} today={today} />}
-        {activeTab === 'week' && <WeekView tasks={weekTasks} today={today} absences={absences} />}
+        {activeTab === 'today' && (
+          <TodayView
+            tasks={todayTasks}
+            onToggle={handleToggle}
+            absences={absences}
+            today={today}
+            onceChores={onceChores}
+            weekAssignments={weekAssignments}
+            allFamilyInstances={allFamilyInstances}
+            uid={uid}
+            onClaim={handleClaim}
+          />
+        )}
+        {activeTab === 'week' && (
+          <WeekView
+            tasks={weekTasks}
+            today={today}
+            absences={absences}
+            onceChores={onceChores}
+            weekAssignments={weekAssignments}
+            uid={uid}
+            onToggle={handleToggle}
+            onRelease={handleRelease}
+          />
+        )}
         {activeTab === 'balance' && <BalanceView earnedCents={earnedCents} paidCents={paidTotal} payments={payments} />}
       </main>
 

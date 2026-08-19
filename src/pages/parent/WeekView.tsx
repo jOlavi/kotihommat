@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { collection, onSnapshot } from 'firebase/firestore'
+import { collection, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { Absence, Chore, Assignment, DayKey, Member, TaskInstance } from '@/types'
 
@@ -127,7 +127,28 @@ export function WeekView({ chores, familyId, firestoreMembers }: Props) {
   const weekId = getWeekId(overviewWeek)
   const weekDates = getWeekDates(overviewWeek)
   const plannableChores = chores.filter(c => c.type !== 'once')
+  const onceChores = chores.filter(c => c.type === 'once')
   const weekTaskInstances = taskInstances.filter(t => t.isoWeek === weekId)
+
+  const handleReleaseOnce = async (choreId: string) => {
+    const assigneeUid = weekAssignments[choreId]?.all
+    await deleteDoc(doc(db, `families/${familyId}/weeklyPlans/${weekId}/assignments/${choreId}`))
+    if (assigneeUid) {
+      const inst = weekTaskInstances.find(t => t.choreId === choreId && t.memberId === assigneeUid)
+      if (inst) await deleteDoc(doc(db, `families/${familyId}/taskInstances/${inst.id}`))
+    }
+  }
+
+  const handleToggleOnce = async (instance: TaskInstance) => {
+    if (instance.status === 'merkitty') return
+    const newStatus = (instance.status ?? 'tekematon') === 'tehty' ? 'tekematon' : 'tehty'
+    await updateDoc(doc(db, `families/${familyId}/taskInstances/${instance.id}`), {
+      status: newStatus,
+      completedAt: newStatus === 'tehty' ? new Date().toISOString() : null,
+    })
+  }
+
+  const claimedOnceChores = onceChores.filter(c => !!weekAssignments[c.id]?.all)
 
   return (
     <div style={{ padding: 'var(--space-4)' }}>
@@ -153,9 +174,66 @@ export function WeekView({ chores, familyId, firestoreMembers }: Props) {
           <ChevronRight size={15} />
         </button>
       </div>
-      <p style={{ fontSize: 12, opacity: 0.55, margin: '0 0 var(--space-4)', textAlign: 'center' }}>
+      <p style={{ fontSize: 12, opacity: 0.55, margin: '0 0 var(--space-2)', textAlign: 'center' }}>
         Yleiskuva viikon kotitöistä ja kunkin lapsen tilanteesta.
       </p>
+
+      {claimedOnceChores.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 600, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Kerran tällä viikolla
+          </p>
+          {claimedOnceChores.map(chore => {
+            const assigneeUid = weekAssignments[chore.id]?.all as string
+            const assigneeName = firestoreMembers.find(m => m.uid === assigneeUid)?.firstName ?? '–'
+            const instance = weekTaskInstances.find(t => t.choreId === chore.id && t.memberId === assigneeUid)
+            const status = instance?.status ?? 'tekematon'
+            const done = status === 'tehty' || status === 'merkitty'
+            const locked = status === 'merkitty'
+            return (
+              <div
+                key={chore.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 13,
+                  padding: 'var(--space-2) var(--space-3)',
+                  border: '1px solid var(--color-divider)',
+                  borderRadius: 'var(--radius-md)',
+                }}
+              >
+                {instance && (
+                  <input
+                    type="checkbox"
+                    checked={done}
+                    disabled={locked}
+                    onChange={() => !locked && handleToggleOnce(instance)}
+                    style={{ width: 18, height: 18, accentColor: 'var(--color-accent)', cursor: locked ? 'not-allowed' : 'pointer', flex: 'none' }}
+                  />
+                )}
+                <span style={{ flex: 1, textDecoration: done ? 'line-through' : 'none', opacity: done ? 0.5 : 1 }}>
+                  {chore.name}
+                </span>
+                <span style={{ fontSize: 12, opacity: 0.6 }}>{assigneeName}</span>
+                <span
+                  className={`tag ${done ? 'tag-accent' : 'tag-outline'}`}
+                  style={{ width: 56, fontSize: 11, display: 'flex', justifyContent: 'center' }}
+                >
+                  {done ? 'Tehty' : 'Kesken'}
+                </span>
+                {!locked && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ fontSize: 11, padding: '2px 8px', height: 'auto', opacity: 0.7 }}
+                    onClick={() => handleReleaseOnce(chore.id)}
+                  >
+                    Vapauta
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {DAY_KEYS.map((dayKey, i) => {
         const date = weekDates[i]

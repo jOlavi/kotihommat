@@ -1,11 +1,15 @@
 import { TriangleAlert } from 'lucide-react'
-import { Absence, TaskInstance } from '@/types'
+import { Absence, Assignment, Chore, TaskInstance } from '@/types'
 
 interface Props {
   tasks: TaskInstance[]
   onToggle: (id: string) => void
   absences: Absence[]
   today: string
+  onceChores?: Chore[]
+  weekAssignments?: Record<string, Assignment>
+  uid?: string
+  onClaim?: (choreId: string) => Promise<void>
 }
 
 function formatPrice(cents: number): string {
@@ -14,7 +18,7 @@ function formatPrice(cents: number): string {
 
 const DAY_NAMES = ['Sunnuntai', 'Maanantai', 'Tiistai', 'Keskiviikko', 'Torstai', 'Perjantai', 'Lauantai']
 
-export function TodayView({ tasks, onToggle, absences, today }: Props) {
+export function TodayView({ tasks, onToggle, absences, today, onceChores, weekAssignments, uid, onClaim }: Props) {
   const isAbsent = absences.some(a => a.from <= today && today <= a.to)
 
   const now = new Date()
@@ -23,6 +27,10 @@ export function TodayView({ tasks, onToggle, absences, today }: Props) {
 
   const undoneCount = tasks.filter(t => (t.status ?? 'tekematon') === 'tekematon').length
   const allDone = tasks.length > 0 && undoneCount === 0
+
+  const visibleOnceChores = (onceChores ?? []).filter(chore =>
+    weekAssignments?.[chore.id]?.all !== uid
+  )
 
   return (
     <div style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
@@ -59,7 +67,7 @@ export function TodayView({ tasks, onToggle, absences, today }: Props) {
         </div>
       )}
 
-      {tasks.length === 0 && (
+      {tasks.length === 0 && visibleOnceChores.length === 0 && (
         <p style={{ fontSize: 13, opacity: 0.5, margin: 0 }}>Ei tehtäviä tänään.</p>
       )}
 
@@ -100,6 +108,48 @@ export function TodayView({ tasks, onToggle, absences, today }: Props) {
           )
         })}
       </div>
+
+      {visibleOnceChores.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 600, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Vapaat tehtävät
+          </p>
+          {visibleOnceChores.map(chore => {
+            const isTaken = !!weekAssignments?.[chore.id]?.all
+            return (
+              <div
+                key={chore.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+                  padding: 'var(--space-3)',
+                  border: '1px solid var(--color-divider)',
+                  borderRadius: 'var(--radius-md)',
+                  opacity: isTaken ? 0.5 : 1,
+                }}
+              >
+                <span style={{ flex: 1, fontSize: 15 }}>{chore.name}</span>
+                {chore.priceCents > 0 && (
+                  <span style={{ fontSize: 14, color: 'var(--color-accent-700)' }}>
+                    {formatPrice(chore.priceCents)} €
+                  </span>
+                )}
+                {isTaken ? (
+                  <span className="tag tag-neutral" style={{ fontSize: 11 }}>Varattu</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ fontSize: 12, padding: '4px 12px', height: 'auto' }}
+                    onClick={() => onClaim?.(chore.id)}
+                  >
+                    Nappaa
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

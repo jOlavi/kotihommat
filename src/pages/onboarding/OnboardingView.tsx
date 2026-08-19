@@ -118,7 +118,7 @@ export function OnboardingView({ user: _user, onComplete }: Props) {
             <div className="field">
               <label htmlFor="setup-family">Perheen nimi</label>
               <input className="input" id="setup-family" name="family"
-                defaultValue="Virtanen" required disabled={loading} />
+                placeholder="esim. Virtanen" disabled={loading} />
             </div>
             {error && <p style={{ fontSize: 13, margin: 0, color: 'oklch(50% 0.18 25)' }}>{error}</p>}
             <button type="submit" className="btn btn-primary btn-block" disabled={loading}>

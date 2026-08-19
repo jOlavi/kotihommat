@@ -71,7 +71,7 @@ export function ChoreDialog({ chore, firestoreMembers, onSave, onClose }: Props)
         <div className="field">
           <label>Tyyppi</label>
           <div className="seg" style={{ width: '100%' }}>
-            {(['daily', 'weekly', 'once'] as ChoreType[]).map(t => (
+            {(['daily', 'once'] as ChoreType[]).map(t => (
               <label key={t} className="seg-opt" style={{ flex: 1, justifyContent: 'center' }}>
                 <input
                   type="radio"
